@@ -96,6 +96,7 @@
     "downloadSvg": "下载 SVG 文件",
     "saveAria": "将图表另存为 SVG",
     "stabilityCircles": "稳定性圆",
+    "sParametersLegend": "S 参数：",
     "zDp1": "看向 DP1 的 Z",
     "zLabel": "Z",
     "idealTooltip": "将所有 ESR 与 ESL 置零",

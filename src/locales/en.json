@@ -96,6 +96,7 @@
     "downloadSvg": "Download SVG file",
     "saveAria": "Save chart as SVG",
     "stabilityCircles": "Stability circles",
+    "sParametersLegend": "S-parameters:",
     "zDp1": "Z looking into DP1",
     "zLabel": "Z",
     "idealTooltip": "set all ESR and ESL to zero",

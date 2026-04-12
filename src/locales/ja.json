@@ -96,6 +96,7 @@
     "downloadSvg": "SVGファイルをダウンロード",
     "saveAria": "チャートをSVGとして保存",
     "stabilityCircles": "安定性円",
+    "sParametersLegend": "Sパラメータ:",
     "zDp1": "DP1を見たZ",
     "zLabel": "Z",
     "idealTooltip": "ESRとESLをすべてゼロに",

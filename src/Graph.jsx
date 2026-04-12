@@ -24,11 +24,12 @@ import Box from "@mui/material/Box";
 import { arcColors, processImpedance, parseInput, reflToZ, polarToRectangular, unitConverter } from "./commonFunctions.js";
 import { sparamNoiseCircles, sparamGainCircles, stabilityCircles } from "./sparam.js";
 
+// Dedicated S-parameter stroke colors (Okabe–Ito–style); avoids clashing with arcColors used for Z traces
 const sParamColorLut = {
-  S11: arcColors[0],
-  S21: arcColors[2],
-  S12: arcColors[1],
-  S22: arcColors[3],
+  S11: "#0072B2",
+  S21: "#E69F00",
+  S12: "#CC79A7",
+  S22: "#009E73",
 };
 
 const dashTypes = [
@@ -733,8 +734,13 @@ function Graph({
     });
   }, [zo, width, resistanceCircles, reactanceCircles]);
 
+  // sParameters.data is a frequency-keyed object, not an array — do not use .length
+  const sParamDatum =
+    sParameters && Object.keys(sParameters.data).length > 0 ? Object.values(sParameters.data)[0] : null;
+  const hasSParamCheckboxes = Boolean(sParamDatum && Object.keys(showSPlots).some((s) => s in sParamDatum));
+
   return (
-    <Box position="relative">
+    <Box sx={{ display: "flex", flexDirection: "column", width: "100%", minWidth: 0, maxWidth: "100%", boxSizing: "border-box" }}>
       <DialogGraphSettings
         dialogOpen={dialogOpen}
         setDialogOpen={setDialogOpen}
@@ -745,129 +751,163 @@ function Graph({
         showAdmittance={showAdmittance}
         setShowAdmittance={setShowAdmittance}
       />
-      <Tooltip title={t("graph.downloadSvg")}>
-        <IconButton
-          aria-label={t("graph.saveAria")}
-          onClick={() => {
-            const svg = svgRef.current;
-            // Serialize the SVG to a string
-            const serializer = new XMLSerializer();
-            let source = serializer.serializeToString(svg);
-            // Create a blob and a download link
-            const url = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(source);
-            const a = document.createElement("a");
-            a.href = url;
-            a.download = "smith_chart.svg";
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-          }}
-          sx={{
-            position: "absolute",
-            top: -6,
-            right: -8,
-          }}
-        >
-          <SaveIcon sx={{ height: "24px", width: "24px", color: "rgba(0, 0, 0, 0.34)" }} />
-        </IconButton>
-      </Tooltip>
-      <Stack
-        spacing={0}
-        sx={{
-          position: "absolute",
-          top: 4,
-          left: 4,
-        }}
-      >
-        {sParameters && sParameters.type === "s2p" && (
-          <div style={{ fontWeight: "bold" }}>
-            <input type="checkbox" checked={showStabilityPlot} onChange={() => setShowStabilityPlot(!showStabilityPlot)} />
-            <label>{t("graph.stabilityCircles")}</label>
-          </div>
-        )}
-        {Object.keys(showSPlots).map((s) => {
-          if (sParameters === null) return null;
-          if (sParameters.data.length === 0) return null;
-          if (s in Object.values(sParameters.data)[0])
-            return (
-              <div key={s} style={{ fontWeight: "bold", color: sParamColorLut[s] }}>
-                <input type="checkbox" checked={showSPlots[s]} onChange={() => setShowSPlots({ ...showSPlots, [s]: !showSPlots[s] })} />
-                <label>{s}</label>
-              </div>
-            );
-          else return null;
-        })}
-        <div style={{ fontWeight: "bold" }}>
-          <input type="checkbox" name="scales" checked={showZPlots} onChange={() => setShowZPlots(!showZPlots)} />
-          <label>{sParameters ? (sParameters.type == "s1p" ? t("graph.zDp1") : t("graph.zLabel")) : t("graph.zLabel")}</label>
-        </div>
-      </Stack>
-      {nonIdealUsed >= 0 && (
-        <Tooltip title={t("graph.idealTooltip")}>
-          <ToggleButton
-            value="showIdeal"
-            selected={showIdeal}
-            onChange={() => setShowIdeal(!showIdeal)}
-            size="small"
+      <Box sx={{ position: "relative", width: "100%", minWidth: 0, maxWidth: "100%" }}>
+        <Tooltip title={t("graph.downloadSvg")}>
+          <IconButton
+            aria-label={t("graph.saveAria")}
+            onClick={() => {
+              const svg = svgRef.current;
+              // Serialize the SVG to a string
+              const serializer = new XMLSerializer();
+              let source = serializer.serializeToString(svg);
+              // Create a blob and a download link
+              const url = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(source);
+              const a = document.createElement("a");
+              a.href = url;
+              a.download = "smith_chart.svg";
+              document.body.appendChild(a);
+              a.click();
+              document.body.removeChild(a);
+            }}
             sx={{
               position: "absolute",
-              bottom: 0,
-              left: 4,
-              py: 0,
-              mb: 0.5,
+              top: -6,
+              right: -8,
             }}
           >
-            {t("graph.showIdeal")}
-          </ToggleButton>
+            <SaveIcon sx={{ height: "24px", width: "24px", color: "rgba(0, 0, 0, 0.34)" }} />
+          </IconButton>
         </Tooltip>
-      )}
-      <Link
-        onClick={() => setDialogOpen(true)}
+        {nonIdealUsed >= 0 && (
+          <Tooltip title={t("graph.idealTooltip")}>
+            <ToggleButton
+              value="showIdeal"
+              selected={showIdeal}
+              onChange={() => setShowIdeal(!showIdeal)}
+              size="small"
+              sx={{
+                position: "absolute",
+                bottom: 0,
+                left: 4,
+                py: 0,
+                mb: 0.5,
+              }}
+            >
+              {t("graph.showIdeal")}
+            </ToggleButton>
+          </Tooltip>
+        )}
+        <Link
+          onClick={() => setDialogOpen(true)}
+          sx={{
+            position: "absolute",
+            bottom: 0,
+            right: 4,
+          }}
+        >
+          {t("graph.graphSettings")}
+        </Link>
+        <LightTooltip
+          title={
+            <HoverTooltip
+              z={{
+                real: hoverImpedance[0] * zo,
+                imaginary: hoverImpedance[1] * zo,
+              }}
+              frequency={hoverImpedance[2]}
+              freqUnit={freqUnit}
+              zo={zo}
+            />
+          }
+          followCursor
+          sx={{ maxWidth: 300 }}
+          enterTouchDelay={0} // show immediately on touch
+          leaveTouchDelay={10000} // stay for 3 seconds
+        >
+          <div ref={svgWrapper} style={{ textAlign: "center" }}>
+            <svg ref={svgRef} style={{ margin: "8px" }}>
+              <g id="topGroup" ref={topGroupRef}>
+                <g id="tracingArcs" ref={tracingArcsRef} />
+                <g id="labels" ref={labelsRef} />
+                <g id="userExtras">
+                  <g id="zMarkers" ref={zMarkersRef} />
+                  <g id="qCircles" ref={qCirclesRef} />
+                  <g id="vswrCircles" ref={vswrCirclesRef} />
+                  <g id="sParams" ref={sParamsRef} />
+                  <g id="nfCircles" ref={nfCirclesRef} />
+                  <g id="stabilityCircles" ref={stabilityCirclesRef} />
+                </g>
+                <g id="impedanceArc" ref={impedanceArcsRef} />
+                <g id="dpCircles" ref={dpCirclesRef} />
+                <g id="hoverRects" ref={hoverRectsRef} />
+              </g>
+            </svg>
+          </div>
+        </LightTooltip>
+      </Box>
+      <Stack
+        direction="row"
+        flexWrap="wrap"
+        spacing="2"
+        useFlexGap
+        alignItems="center"
+        justifyContent="space-between"
         sx={{
-          position: "absolute",
-          bottom: 0,
-          right: 4,
+          px: 1,
+          py: 0.5,
+          width: "100%",
+          minWidth: 0,
+          maxWidth: "100%",
+          boxSizing: "border-box",
         }}
       >
-        {t("graph.graphSettings")}
-      </Link>
-      <LightTooltip
-        title={
-          <HoverTooltip
-            z={{
-              real: hoverImpedance[0] * zo,
-              imaginary: hoverImpedance[1] * zo,
+        <Stack
+          direction="row"
+          flexWrap="wrap"
+          spacing={1}
+          useFlexGap
+          alignItems="center"
+          sx={{ flex: "0 1 auto", minWidth: 0, maxWidth: "100%" }}
+        >
+          <div style={{ fontWeight: "bold" }}>
+            <input type="checkbox" name="scales" checked={showZPlots} onChange={() => setShowZPlots(!showZPlots)} />
+            <label>{sParameters ? (sParameters.type == "s1p" ? t("graph.zDp1") : t("graph.zLabel")) : t("graph.zLabel")}</label>
+          </div>
+          {sParameters && sParameters.type === "s2p" && (
+            <div style={{ fontWeight: "bold" }}>
+              <input type="checkbox" checked={showStabilityPlot} onChange={() => setShowStabilityPlot(!showStabilityPlot)} />
+              <label>{t("graph.stabilityCircles")}</label>
+            </div>
+          )}
+        </Stack>
+        {hasSParamCheckboxes && (
+          <Stack
+            direction="row"
+            flexWrap="wrap"
+            spacing={1}
+            useFlexGap
+            alignItems="center"
+            sx={{
+              flex:  "1 1 0" ,
+              minWidth: 0,
+              maxWidth: "100%",
+              justifyContent: "flex-end",
             }}
-            frequency={hoverImpedance[2]}
-            freqUnit={freqUnit}
-            zo={zo}
-          />
-        }
-        followCursor
-        sx={{ maxWidth: 300 }}
-        enterTouchDelay={0} // show immediately on touch
-        leaveTouchDelay={10000} // stay for 3 seconds
-      >
-        <div ref={svgWrapper} style={{ textAlign: "center" }}>
-          <svg ref={svgRef} style={{ margin: "8px" }}>
-            <g id="topGroup" ref={topGroupRef}>
-              <g id="tracingArcs" ref={tracingArcsRef} />
-              <g id="labels" ref={labelsRef} />
-              <g id="userExtras">
-                <g id="zMarkers" ref={zMarkersRef} />
-                <g id="qCircles" ref={qCirclesRef} />
-                <g id="vswrCircles" ref={vswrCirclesRef} />
-                <g id="sParams" ref={sParamsRef} />
-                <g id="nfCircles" ref={nfCirclesRef} />
-                <g id="stabilityCircles" ref={stabilityCirclesRef} />
-              </g>
-              <g id="impedanceArc" ref={impedanceArcsRef} />
-              <g id="dpCircles" ref={dpCirclesRef} />
-              <g id="hoverRects" ref={hoverRectsRef} />
-            </g>
-          </svg>
-        </div>
-      </LightTooltip>
+          >
+            <span style={{ fontWeight: "bold" }}>{t("graph.sParametersLegend")}</span>
+            {Object.keys(showSPlots).map((s) => {
+              if (s in sParamDatum)
+                return (
+                  <div key={s} style={{ fontWeight: "bold", color: sParamColorLut[s] }}>
+                    <input type="checkbox" checked={showSPlots[s]} onChange={() => setShowSPlots({ ...showSPlots, [s]: !showSPlots[s] })} />
+                    <label>{s}</label>
+                  </div>
+                );
+              return null;
+            })}
+          </Stack>
+        )}
+      </Stack>
     </Box>
   );
 }
@@ -1057,8 +1097,7 @@ function initializeSmithChart(tracingArcsRef, width, resistanceCircles, reactanc
       .append("path")
       .attr(
         "d",
-        `M ${xStart * width * 0.5} ${yStart * width * 0.5} A ${cy * width * 0.5} ${cy * width * 0.5} 0 0 ${clockwise} ${
-          xEnd * width * 0.5
+        `M ${xStart * width * 0.5} ${yStart * width * 0.5} A ${cy * width * 0.5} ${cy * width * 0.5} 0 0 ${clockwise} ${xEnd * width * 0.5
         } ${yEnd * width * 0.5}`,
       );
   });
@@ -1087,8 +1126,7 @@ function initializeSmithChart(tracingArcsRef, width, resistanceCircles, reactanc
         .append("path")
         .attr(
           "d",
-          `M ${(-2 - xStart) * width * 0.5} ${yStart * width * 0.5} A ${cy * width * 0.5} ${
-            cy * width * 0.5
+          `M ${(-2 - xStart) * width * 0.5} ${yStart * width * 0.5} A ${cy * width * 0.5} ${cy * width * 0.5
           } 0 0 ${clockwise} ${(-2 - xEnd) * width * 0.5} ${yEnd * width * 0.5}`,
         )
         .attr("stroke", "rgba(0, 0, 0, 0.25)");

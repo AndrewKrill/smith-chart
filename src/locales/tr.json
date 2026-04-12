@@ -96,6 +96,7 @@
     "downloadSvg": "SVG dosyasını indir",
     "saveAria": "Grafiği SVG olarak kaydet",
     "stabilityCircles": "Kararlılık çemberleri",
+    "sParametersLegend": "S-parametreleri:",
     "zDp1": "DP1’e bakan Z",
     "zLabel": "Z",
     "idealTooltip": "Tüm ESR ve ESL değerlerini sıfırla",
