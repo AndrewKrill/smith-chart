@@ -231,6 +231,15 @@ function localizedOptions2Init(t) {
   };
 }
 
+function localizedOptionsZInit(t) {
+  return {
+    axes: [
+      { scale: "y", label: t("results.zMag") },
+      { scale: "y2", side: 1, label: t("results.zAng") },
+    ],
+  };
+}
+
 function localizedOptionsGainInit(t) {
   return {
     ...optionsGainInit,
@@ -267,15 +276,15 @@ function SPlot({ sparametersData, options, freqUnit, title }) {
     );
   });
 }
-/** plotKind "s11": |Γ| dB + phase (dual y); "s21": |S21| dB assuming |S11|²+|S21|²=1 (single y). */
+/** plotKind "z": |Z| (Ω) + ∠Z (°) from rectangularToPolar(z); "s11": |Γ| dB + phase via processImpedance; "s21": |S21| dB (|S11|²+|S21|²=1). */
 function SpanTolerancePlot({ spanResultsByTol, options, freqUnit, zo, plotKind, legendY }) {
   const { t } = useTranslation();
-  const includePhase = plotKind === "s11";
+  const dualY = plotKind === "s11" || plotKind === "z";
   if (!spanResultsByTol || spanResultsByTol.length === 0) return null;
   const nominal = spanResultsByTol[spanResultsByTol.length - 1];
   if (!nominal || Object.keys(nominal).length === 0) return null;
   const sParamOpt = JSON.parse(JSON.stringify(options));
-  if (!includePhase) {
+  if (!dualY) {
     sParamOpt.axes[1].label = legendY;
   }
   const sortedFreq = Object.keys(nominal).sort((a, b) => a - b);
@@ -283,37 +292,60 @@ function SpanTolerancePlot({ spanResultsByTol, options, freqUnit, zo, plotKind, 
   const seriesData = [];
   for (let i = 0; i < spanResultsByTol.length; i++) {
     const tolMap = spanResultsByTol[i];
-    const magDb = [];
-    const angDeg = [];
+    const magVals = [];
+    const angVals = [];
     for (const fx of sortedFreq) {
-      const { refReal, refImag } = processImpedance(tolMap[fx].z, zo);
-      const { magnitude, angle } = rectangularToPolar({ real: refReal, imaginary: refImag });
-      if (includePhase) {
-        magDb.push(20 * Math.log10(magnitude));
-        angDeg.push(angle);
+      if (plotKind === "z") {
+        const { magnitude, angle } = rectangularToPolar(tolMap[fx].z);
+        magVals.push(magnitude);
+        angVals.push(angle);
+      } else if (plotKind === "s11") {
+        const { refReal, refImag } = processImpedance(tolMap[fx].z, zo);
+        const { magnitude, angle } = rectangularToPolar({ real: refReal, imaginary: refImag });
+        magVals.push(20 * Math.log10(magnitude));
+        angVals.push(angle);
       } else {
-        magDb.push(20 * Math.log10(Math.sqrt(1 - magnitude ** 2)));
+        const { refReal, refImag } = processImpedance(tolMap[fx].z, zo);
+        const { magnitude } = rectangularToPolar({ real: refReal, imaginary: refImag });
+        magVals.push(20 * Math.log10(Math.sqrt(1 - magnitude ** 2)));
       }
     }
     const last = i === spanResultsByTol.length - 1;
-    if (includePhase) {
-      seriesData.push(magDb, angDeg);
-      sParamOpt.series.push(
-        {
-          label: last ? t("results.s11db") : t("results.tolPipe", { i }),
-          stroke: last ? "blue" : "#4b4c80",
-          width: 2,
-          scale: "y",
-        },
-        {
-          label: last ? t("results.s11ang") : t("results.tolAng", { i }),
-          stroke: last ? "red" : "#9c5656",
-          width: 2,
-          scale: "y2",
-        },
-      );
+    if (dualY) {
+      seriesData.push(magVals, angVals);
+      if (plotKind === "s11") {
+        sParamOpt.series.push(
+          {
+            label: last ? t("results.s11db") : t("results.tolPipe", { i }),
+            stroke: last ? "blue" : "#4b4c80",
+            width: 2,
+            scale: "y",
+          },
+          {
+            label: last ? t("results.s11ang") : t("results.tolAng", { i }),
+            stroke: last ? "red" : "#9c5656",
+            width: 2,
+            scale: "y2",
+          },
+        );
+      } else {
+        sParamOpt.series.push(
+          {
+            label: last ? t("results.zMag") : t("results.zTolMag", { i }),
+            stroke: last ? "blue" : "#4b4c80",
+            width: 2,
+            scale: "y",
+          },
+          {
+            label: last ? t("results.zAng") : t("results.zTolAng", { i }),
+            stroke: last ? "red" : "#9c5656",
+            width: 2,
+            scale: "y2",
+          },
+        );
+      }
     } else {
-      seriesData.push(magDb);
+      seriesData.push(magVals);
       sParamOpt.series.push({
         label: last ? legendY : t("results.tol", { i }),
         stroke: last ? "green" : "gray",
@@ -400,6 +432,7 @@ export default function Results({ zProc, spanResults, freqUnit, plotType, sParam
 
   const loc1 = localizedOptionsInit(t);
   const loc2 = localizedOptions2Init(t);
+  const locZ = localizedOptionsZInit(t);
   const locG = localizedOptionsGainInit(t);
 
   const optionsS21 = {
@@ -415,6 +448,14 @@ export default function Results({ zProc, spanResults, freqUnit, plotType, sParam
     height: commonOptions.height,
     series: [...commonOptions.series],
     axes: [...commonOptions.axes, ...loc1.axes],
+    scales: optionsInit.scales,
+  };
+
+  const optionsZTol = {
+    width: commonOptions.width,
+    height: commonOptions.height,
+    series: [...commonOptions.series],
+    axes: [...commonOptions.axes, ...locZ.axes],
     scales: optionsInit.scales,
   };
 
@@ -534,6 +575,7 @@ export default function Results({ zProc, spanResults, freqUnit, plotType, sParam
         </Grid>
 
         <div ref={containerRef} style={{ width: "100%", marginTop: "30px" }}>
+          <SpanTolerancePlot spanResultsByTol={spanResults} options={optionsZTol} freqUnit={freqUnit} zo={zo} plotKind="z" />
           <SpanTolerancePlot spanResultsByTol={spanResults} options={optionsS11Tol} freqUnit={freqUnit} zo={zo} plotKind="s11" />
           <Typography sx={{ textAlign: "center", mt: 2 }}>
             {t("results.assuming")}{" "}

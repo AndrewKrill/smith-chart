@@ -90,7 +90,11 @@
     "gainAxis": "利得 (dB)",
     "tol": "許容差 {{i}}",
     "tolPipe": "|tol{{i}}|",
-    "tolAng": "∠tol{{i}}"
+    "tolAng": "∠tol{{i}}",
+    "zMag": "|Z| (Ω)",
+    "zAng": "∠Z (°)",
+    "zTolMag": "|Z|, tol {{i}}",
+    "zTolAng": "∠Z, tol {{i}}"
   },
   "graph": {
     "downloadSvg": "SVGファイルをダウンロード",

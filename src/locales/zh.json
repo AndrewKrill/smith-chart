@@ -90,7 +90,11 @@
     "gainAxis": "增益 (dB)",
     "tol": "容差 {{i}}",
     "tolPipe": "|tol{{i}}|",
-    "tolAng": "∠tol{{i}}"
+    "tolAng": "∠tol{{i}}",
+    "zMag": "|Z| (Ω)",
+    "zAng": "∠Z (°)",
+    "zTolMag": "|Z|，容差 {{i}}",
+    "zTolAng": "∠Z，容差 {{i}}"
   },
   "graph": {
     "downloadSvg": "下载 SVG 文件",
