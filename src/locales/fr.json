@@ -96,6 +96,7 @@
     "downloadSvg": "Télécharger le fichier SVG",
     "saveAria": "Enregistrer le graphique en SVG",
     "stabilityCircles": "Cercles de stabilité",
+    "stabilityCirclesToast": "Si aucun cercle n’apparaît, c’est parce que l’abaque de Smith entière est stable. Plus de détails dans le tutoriel sur la stabilité",
     "sParametersConjugateLead": "Paramètres S (conjugués ? ",
     "sParametersConjugateClose": ") :",
     "sParametersConjugateAria": "Conjuguer tous les paramètres S",

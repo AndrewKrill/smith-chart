@@ -96,6 +96,7 @@
     "downloadSvg": "SVG फ़ाइल डाउनलोड करें",
     "saveAria": "चार्ट को SVG के रूप में सहेजें",
     "stabilityCircles": "स्थिरता वृत्त",
+    "stabilityCirclesToast": "यदि कोई वृत्त दिखाई नहीं देता है तो इसका कारण यह है कि पूरा स्मिथ चार्ट स्थिर है। अधिक विवरण के लिए स्थिरता ट्यूटोरियल देखें",
     "sParametersConjugateLead": "S-पैरामीटर (संयुग्म? ",
     "sParametersConjugateClose": "):",
     "sParametersConjugateAria": "सभी S-पैरामीटर संयुग्म करें",

@@ -96,6 +96,7 @@
     "downloadSvg": "下载 SVG 文件",
     "saveAria": "将图表另存为 SVG",
     "stabilityCircles": "稳定性圆",
+    "stabilityCirclesToast": "如果没有显示圆，是因为整个史密斯圆图都处于稳定状态。更多说明请参阅稳定性教程",
     "sParametersConjugateLead": "S 参数（共轭？ ",
     "sParametersConjugateClose": "）：",
     "sParametersConjugateAria": "对所有 S 参数取共轭",

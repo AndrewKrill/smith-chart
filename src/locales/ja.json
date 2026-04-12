@@ -96,6 +96,7 @@
     "downloadSvg": "SVGファイルをダウンロード",
     "saveAria": "チャートをSVGとして保存",
     "stabilityCircles": "安定性円",
+    "stabilityCirclesToast": "円が表示されない場合は、スミスチャート全体が安定しているためです。詳細は安定性チュートリアルを参照してください",
     "sParametersConjugateLead": "Sパラメータ（共役？ ",
     "sParametersConjugateClose": "）：",
     "sParametersConjugateAria": "すべてのSパラメータを複素共役にする",

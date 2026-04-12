@@ -96,6 +96,7 @@
     "downloadSvg": "Descargar archivo SVG",
     "saveAria": "Guardar gráfico como SVG",
     "stabilityCircles": "Círculos de estabilidad",
+    "stabilityCirclesToast": "Si no aparecen círculos es porque toda la carta de Smith es estable. Más detalles en el tutorial de estabilidad",
     "sParametersConjugateLead": "Parámetros S (¿conjugados? ",
     "sParametersConjugateClose": "):",
     "sParametersConjugateAria": "Conjugar todos los parámetros S",
