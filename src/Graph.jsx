@@ -113,6 +113,7 @@ function Graph({
   const [showAdmittance, setShowAdmittance] = useState(true);
 
   const [showSPlots, setShowSPlots] = useState({ S11: true, S21: true, S12: true, S22: true });
+  const [conjugateSParams, setConjugateSParams] = useState(false);
   const [showZPlots, setShowZPlots] = useState(true);
   const [showStabilityPlot, setShowStabilityPlot] = useState(false);
 
@@ -204,7 +205,10 @@ function Graph({
       if (!(s in Object.values(sparametersData)[0])) continue;
       if (showSPlots[s] === false) continue; // skip if the plot is not shown
       for (const v in sparametersData) {
-        const rect = polarToRectangular(sparametersData[v][s]);
+        let rect = polarToRectangular(sparametersData[v][s]);
+        if (conjugateSParams) {
+          rect = { real: rect.real, imaginary: -rect.imaginary };
+        }
         const z = reflToZ(rect, sParameters.settings.zo);
         const [x, y] = impedanceToSmithChart(z.real / zo, z.imaginary / zo, width);
 
@@ -245,7 +249,7 @@ function Graph({
     }
 
     setSSnaps(sParamSnap);
-  }, [zo, width, plotType, sParameters, showSPlots]);
+  }, [zo, width, plotType, sParameters, showSPlots, conjugateSParams]);
 
   //draw the custom markers
   useEffect(() => {
@@ -846,12 +850,10 @@ function Graph({
         </LightTooltip>
       </Box>
       <Stack
-        direction="row"
-        flexWrap="wrap"
-        spacing="2"
+        direction="column"
+        spacing={1}
         useFlexGap
-        alignItems="center"
-        justifyContent="space-between"
+        alignItems="flex-start"
         sx={{
           px: 1,
           py: 0.5,
@@ -867,14 +869,14 @@ function Graph({
           spacing={1}
           useFlexGap
           alignItems="center"
-          sx={{ flex: "0 1 auto", minWidth: 0, maxWidth: "100%" }}
+          sx={{ minWidth: 0, maxWidth: "100%" }}
         >
-          <div style={{ fontWeight: "bold" }}>
+          <div>
             <input type="checkbox" name="scales" checked={showZPlots} onChange={() => setShowZPlots(!showZPlots)} />
             <label>{sParameters ? (sParameters.type == "s1p" ? t("graph.zDp1") : t("graph.zLabel")) : t("graph.zLabel")}</label>
           </div>
           {sParameters && sParameters.type === "s2p" && (
-            <div style={{ fontWeight: "bold" }}>
+            <div>
               <input type="checkbox" checked={showStabilityPlot} onChange={() => setShowStabilityPlot(!showStabilityPlot)} />
               <label>{t("graph.stabilityCircles")}</label>
             </div>
@@ -888,19 +890,35 @@ function Graph({
             useFlexGap
             alignItems="center"
             sx={{
-              flex:  "1 1 0" ,
               minWidth: 0,
               maxWidth: "100%",
-              justifyContent: "flex-end",
+              justifyContent: "flex-start",
             }}
           >
-            <span style={{ fontWeight: "bold" }}>{t("graph.sParametersLegend")}</span>
+            <span
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                flexWrap: "wrap",
+                columnGap: 4,
+                rowGap: 2,
+              }}
+            >
+              {t("graph.sParametersConjugateLead")}
+              <input
+                type="checkbox"
+                checked={conjugateSParams}
+                onChange={() => setConjugateSParams(!conjugateSParams)}
+                aria-label={t("graph.sParametersConjugateAria")}
+              />
+              {t("graph.sParametersConjugateClose")}
+            </span>
             {Object.keys(showSPlots).map((s) => {
               if (s in sParamDatum)
                 return (
                   <div key={s} style={{ fontWeight: "bold", color: sParamColorLut[s] }}>
                     <input type="checkbox" checked={showSPlots[s]} onChange={() => setShowSPlots({ ...showSPlots, [s]: !showSPlots[s] })} />
-                    <label>{s}</label>
+                    <label>{conjugateSParams ? `${s}*` : s}</label>
                   </div>
                 );
               return null;
