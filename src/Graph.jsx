@@ -20,6 +20,8 @@ import FormControlLabel from "@mui/material/FormControlLabel";
 import Checkbox from "@mui/material/Checkbox";
 
 import Box from "@mui/material/Box";
+import Snackbar from "@mui/material/Snackbar";
+import SnackbarContent from "@mui/material/SnackbarContent";
 
 import { arcColors, processImpedance, parseInput, reflToZ, polarToRectangular, unitConverter } from "./commonFunctions.js";
 import { sparamNoiseCircles, sparamGainCircles, stabilityCircles } from "./sparam.js";
@@ -116,6 +118,7 @@ function Graph({
   const [conjugateSParams, setConjugateSParams] = useState(false);
   const [showZPlots, setShowZPlots] = useState(true);
   const [showStabilityPlot, setShowStabilityPlot] = useState(false);
+  const [stabilityCirclesToastOpen, setStabilityCirclesToastOpen] = useState(false);
 
   function updateWidth() {
     var newWidth = svgWrapper.current.offsetWidth;
@@ -739,8 +742,7 @@ function Graph({
   }, [zo, width, resistanceCircles, reactanceCircles]);
 
   // sParameters.data is a frequency-keyed object, not an array — do not use .length
-  const sParamDatum =
-    sParameters && Object.keys(sParameters.data).length > 0 ? Object.values(sParameters.data)[0] : null;
+  const sParamDatum = sParameters && Object.keys(sParameters.data).length > 0 ? Object.values(sParameters.data)[0] : null;
   const hasSParamCheckboxes = Boolean(sParamDatum && Object.keys(showSPlots).some((s) => s in sParamDatum));
 
   return (
@@ -863,21 +865,22 @@ function Graph({
           boxSizing: "border-box",
         }}
       >
-        <Stack
-          direction="row"
-          flexWrap="wrap"
-          spacing={1}
-          useFlexGap
-          alignItems="center"
-          sx={{ minWidth: 0, maxWidth: "100%" }}
-        >
+        <Stack direction="row" flexWrap="wrap" spacing={1} useFlexGap alignItems="center" sx={{ minWidth: 0, maxWidth: "100%" }}>
           <div>
             <input type="checkbox" name="scales" checked={showZPlots} onChange={() => setShowZPlots(!showZPlots)} />
             <label>{sParameters ? (sParameters.type == "s1p" ? t("graph.zDp1") : t("graph.zLabel")) : t("graph.zLabel")}</label>
           </div>
           {sParameters && sParameters.type === "s2p" && (
             <div>
-              <input type="checkbox" checked={showStabilityPlot} onChange={() => setShowStabilityPlot(!showStabilityPlot)} />
+              <input
+                type="checkbox"
+                checked={showStabilityPlot}
+                onChange={() => {
+                  const next = !showStabilityPlot;
+                  setShowStabilityPlot(next);
+                  if (next) setStabilityCirclesToastOpen(true);
+                }}
+              />
               <label>{t("graph.stabilityCircles")}</label>
             </div>
           )}
@@ -926,6 +929,21 @@ function Graph({
           </Stack>
         )}
       </Stack>
+      <Snackbar
+        open={stabilityCirclesToastOpen}
+        autoHideDuration={10000}
+        onClose={() => setStabilityCirclesToastOpen(false)}
+        anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
+      >
+        <SnackbarContent
+          message={t("graph.stabilityCirclesToast")}
+          sx={{
+            backgroundColor: "#2196f3",
+            color: "#fff",
+            maxWidth: 420,
+          }}
+        />
+      </Snackbar>
     </Box>
   );
 }
@@ -1115,7 +1133,8 @@ function initializeSmithChart(tracingArcsRef, width, resistanceCircles, reactanc
       .append("path")
       .attr(
         "d",
-        `M ${xStart * width * 0.5} ${yStart * width * 0.5} A ${cy * width * 0.5} ${cy * width * 0.5} 0 0 ${clockwise} ${xEnd * width * 0.5
+        `M ${xStart * width * 0.5} ${yStart * width * 0.5} A ${cy * width * 0.5} ${cy * width * 0.5} 0 0 ${clockwise} ${
+          xEnd * width * 0.5
         } ${yEnd * width * 0.5}`,
       );
   });
@@ -1144,7 +1163,8 @@ function initializeSmithChart(tracingArcsRef, width, resistanceCircles, reactanc
         .append("path")
         .attr(
           "d",
-          `M ${(-2 - xStart) * width * 0.5} ${yStart * width * 0.5} A ${cy * width * 0.5} ${cy * width * 0.5
+          `M ${(-2 - xStart) * width * 0.5} ${yStart * width * 0.5} A ${cy * width * 0.5} ${
+            cy * width * 0.5
           } 0 0 ${clockwise} ${(-2 - xEnd) * width * 0.5} ${yEnd * width * 0.5}`,
         )
         .attr("stroke", "rgba(0, 0, 0, 0.25)");

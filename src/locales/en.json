@@ -96,6 +96,7 @@
     "downloadSvg": "Download SVG file",
     "saveAria": "Save chart as SVG",
     "stabilityCircles": "Stability circles",
+    "stabilityCirclesToast": "If no circles appear it is because the entire Smith Chart is stable. More details in Stability Tutorial",
     "sParametersConjugateLead": "S-parameters (conjugated? ",
     "sParametersConjugateClose": "):",
     "sParametersConjugateAria": "Conjugate all S-parameters",
