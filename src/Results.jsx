@@ -267,6 +267,64 @@ function SPlot({ sparametersData, options, freqUnit, title }) {
     );
   });
 }
+/** plotKind "s11": |Γ| dB + phase (dual y); "s21": |S21| dB assuming |S11|²+|S21|²=1 (single y). */
+function SpanTolerancePlot({ spanResultsByTol, options, freqUnit, zo, plotKind, legendY }) {
+  const { t } = useTranslation();
+  const includePhase = plotKind === "s11";
+  if (!spanResultsByTol || spanResultsByTol.length === 0) return null;
+  const nominal = spanResultsByTol[spanResultsByTol.length - 1];
+  if (!nominal || Object.keys(nominal).length === 0) return null;
+  const sParamOpt = JSON.parse(JSON.stringify(options));
+  if (!includePhase) {
+    sParamOpt.axes[1].label = legendY;
+  }
+  const sortedFreq = Object.keys(nominal).sort((a, b) => a - b);
+  const fAxis = sortedFreq.map((fx) => fx / unitConverter[freqUnit]);
+  const seriesData = [];
+  for (let i = 0; i < spanResultsByTol.length; i++) {
+    const tolMap = spanResultsByTol[i];
+    const magDb = [];
+    const angDeg = [];
+    for (const fx of sortedFreq) {
+      const { refReal, refImag } = processImpedance(tolMap[fx].z, zo);
+      const { magnitude, angle } = rectangularToPolar({ real: refReal, imaginary: refImag });
+      if (includePhase) {
+        magDb.push(20 * Math.log10(magnitude));
+        angDeg.push(angle);
+      } else {
+        magDb.push(20 * Math.log10(Math.sqrt(1 - magnitude ** 2)));
+      }
+    }
+    const last = i === spanResultsByTol.length - 1;
+    if (includePhase) {
+      seriesData.push(magDb, angDeg);
+      sParamOpt.series.push(
+        {
+          label: last ? t("results.s11db") : t("results.tolPipe", { i }),
+          stroke: last ? "blue" : "#4b4c80",
+          width: 2,
+          scale: "y",
+        },
+        {
+          label: last ? t("results.s11ang") : t("results.tolAng", { i }),
+          stroke: last ? "red" : "#9c5656",
+          width: 2,
+          scale: "y2",
+        },
+      );
+    } else {
+      seriesData.push(magDb);
+      sParamOpt.series.push({
+        label: last ? legendY : t("results.tol", { i }),
+        stroke: last ? "green" : "gray",
+        width: 2,
+        scale: "y",
+      });
+    }
+  }
+  const gData = [fAxis, ...seriesData];
+  return <UplotReact options={sParamOpt} data={gData} />;
+}
 function GainPlot({ gain, options, freqUnit, title, legend }) {
   const { t } = useTranslation();
   if (!gain || Object.keys(gain).length === 0) return null;
@@ -344,12 +402,20 @@ export default function Results({ zProc, spanResults, freqUnit, plotType, sParam
   const loc2 = localizedOptions2Init(t);
   const locG = localizedOptionsGainInit(t);
 
-  const options3 = {
+  const optionsS21 = {
     width: commonOptions.width,
     height: commonOptions.height,
-    series: [...commonOptions.series, ...loc2.series],
+    series: [...commonOptions.series],
     axes: [...commonOptions.axes, ...loc2.axes],
     scales: options2Init.scales,
+  };
+
+  const optionsS11Tol = {
+    width: commonOptions.width,
+    height: commonOptions.height,
+    series: [...commonOptions.series],
+    axes: [...commonOptions.axes, ...loc1.axes],
+    scales: optionsInit.scales,
   };
 
   const options4 = {
@@ -376,26 +442,19 @@ export default function Results({ zProc, spanResults, freqUnit, plotType, sParam
     scales: optionsInit.scales,
   };
 
-  var s11 = [];
-  var s11_ang = [];
   var s21 = [];
-  var data, data2;
   //FIXME - move this to a separate function so we can do unit testing
-  const sortedSpanFrequencies = Object.keys(spanResults).sort((a, b) => a - b);
+  const nominalSpan = spanResults[spanResults.length - 1];
+  const sortedSpanFrequencies = Object.keys(nominalSpan).sort((a, b) => a - b);
   for (const f of sortedSpanFrequencies) {
-    const { refReal, refImag } = processImpedance(spanResults[f].z, zo);
-    const { magnitude, angle } = rectangularToPolar({
+    const { refReal, refImag } = processImpedance(nominalSpan[f].z, zo);
+    const { magnitude } = rectangularToPolar({
       real: refReal,
       imaginary: refImag,
     });
-
-    s11.push(20 * Math.log10(magnitude));
-    s11_ang.push(angle);
     s21.push(20 * Math.log10(Math.sqrt(1 - magnitude ** 2)));
   }
   const absSpanFrequencies = sortedSpanFrequencies.map((f) => f / unitConverter[freqUnit]);
-  data = [absSpanFrequencies, s11, s11_ang];
-  data2 = [absSpanFrequencies, s21];
 
   var maxS21 = s21[0];
   var maxF = 0;
@@ -475,7 +534,7 @@ export default function Results({ zProc, spanResults, freqUnit, plotType, sParam
         </Grid>
 
         <div ref={containerRef} style={{ width: "100%", marginTop: "30px" }}>
-          <UplotReact options={options4} data={data} />
+          <SpanTolerancePlot spanResultsByTol={spanResults} options={optionsS11Tol} freqUnit={freqUnit} zo={zo} plotKind="s11" />
           <Typography sx={{ textAlign: "center", mt: 2 }}>
             {t("results.assuming")}{" "}
             <i>
@@ -485,7 +544,14 @@ export default function Results({ zProc, spanResults, freqUnit, plotType, sParam
             </i>
             )
           </Typography>
-          <UplotReact options={options3} data={data2} />
+          <SpanTolerancePlot
+            spanResultsByTol={spanResults}
+            options={optionsS21}
+            freqUnit={freqUnit}
+            zo={zo}
+            plotKind="s21"
+            legendY={t("results.s21db")}
+          />
         </div>
         <ul>
           <li>{t("results.maxS21", { v: maxS21.toPrecision(6), f: maxF, unit: freqUnit })}</li>

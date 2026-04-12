@@ -191,7 +191,7 @@ function App() {
                 )}
                 <Results
                   zProc={processedImpedanceResults}
-                  spanResults={spanResults[spanResults.length - 1]}
+                  spanResults={spanResults}
                   freqUnit={settings.frequencyUnit}
                   plotType={plotType}
                   sParameters={sParameters}
