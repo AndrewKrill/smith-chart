@@ -9,7 +9,8 @@
     "lint": "eslint . && prettier --check src tests && node scripts/check-locale-keys.mjs",
     "prettier": "prettier --write src tests",
     "preview": "vite preview",
-    "test": "vitest"
+    "test": "vitest",
+    "serve": "serve -l 8080 dist"
   },
   "dependencies": {
     "@emotion/react": "^11.14.0",
@@ -24,6 +25,7 @@
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "react-i18next": "^17.0.2",
+    "serve": "^14.2.6",
     "uplot": "^1.6.32",
     "uplot-react": "^1.2.2"
   },
