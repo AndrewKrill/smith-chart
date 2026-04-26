@@ -1133,7 +1133,7 @@ function Circuit({ userCircuit, setUserCircuit, frequency, setPlotType, setSetti
         </p>
       </div>
 
-      <Grid container spacing={0} columns={{ xs: 4, sm: 8, md: 4, lg: 8, xl: 12 }}>
+      <Grid container spacing={0} columns={{ xs: 4, sm: 8, md: 4, lg: 8, xl: 10 }}>
         {userCircuit.map((c, i) => {
           const comp = circuitComponents[c.name];
           const color = arcColors[i % arcColors.length];
