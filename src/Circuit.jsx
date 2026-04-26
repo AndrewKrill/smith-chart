@@ -84,6 +84,9 @@ function setValue(value, field, setUserCircuit, index) {
   setUserCircuit((z) => {
     const newCircuit = [...z];
     newCircuit[index][field] = parseInput(value);
+    if (field === "value") newCircuit[index].slider = 0;
+    if (field === "real") newCircuit[index].slider_re = 0;
+    if (field === "imaginary") newCircuit[index].slider_im = 0;
     return newCircuit;
   });
 }
