@@ -228,6 +228,17 @@ function App() {
           <Grid size={12}>
             <Card>
               <CardContent>
+                <Box sx={{ mb: 2 }}>
+                  <Link
+                    href="https://chatgpt.com/g/g-p-69ee75631f0c819181c57a90673abcdc-onlinesmithchart-helper/project"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    color="#1976d2"
+                    underline="always"
+                  >
+                    Ask OnlineSmithChart Helper (ChatGPT)
+                  </Link>
+                </Box>
                 <div style={{ display: "flex", justifyContent: "space-between" }}>
                   <Typography>{t("app.commentsTitle")}</Typography>
                   <Link
