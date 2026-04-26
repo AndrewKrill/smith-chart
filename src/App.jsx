@@ -230,7 +230,7 @@ function App() {
               <CardContent>
                 <Box sx={{ mb: 2 }}>
                   <Link
-                    href="https://chatgpt.com/g/g-p-69ee75631f0c819181c57a90673abcdc-onlinesmithchart-helper/project"
+                    href="https://chatgpt.com/g/g-p-69ee7cba04888191bc878377f29b9f76-onlinesmithchart-helper/project"
                     target="_blank"
                     rel="noopener noreferrer"
                     color="#1976d2"
