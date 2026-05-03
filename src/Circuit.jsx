@@ -1,4 +1,4 @@
-import { useState } from "react";
+import React, { useState } from "react";
 import { useTranslation } from "react-i18next";
 import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
@@ -899,7 +899,7 @@ function ToleranceComponent({ tol, index, setUserCircuit }) {
   );
 }
 
-function Circuit({ userCircuit, setUserCircuit, frequency, setPlotType, setSettings, showIdeal }) {
+function Circuit({ userCircuit, setUserCircuit, frequency, setPlotType, setSettings, showIdeal, calPlaneDP }) {
   const { t } = useTranslation();
   const w = 2 * Math.PI * frequency;
   const [modalOpen, setModalOpen] = useState(false);
@@ -1138,93 +1138,122 @@ function Circuit({ userCircuit, setUserCircuit, frequency, setPlotType, setSetti
           const comp = circuitComponents[c.name];
           const color = arcColors[i % arcColors.length];
           return (
-            <Grid size={2} key={i} sx={{ display: "flex", flexDirection: "column", borderRadius: 1 }} className="circuitDrawing">
-              <Box position="relative">
-                <img src={comp.src} width="100%" />
-                {i == 0 || userCircuit[i].name == "loadTerm" ? null : (
-                  <IconButton
-                    onClick={() => {
-                      setUserCircuit((z) => {
-                        var newZ = [
-                          ...z.slice(0, i), // Items before the index `i`
-                          ...z.slice(i + 1),
-                        ];
-                        //if sparam and last element is loadTerm, remove it
-                        if (c.name == "sparam" && newZ[newZ.length - 1].name == "loadTerm") {
-                          newZ = [...newZ.slice(0, -1)];
-                        }
-                        return newZ;
-                      });
-                    }}
+            <React.Fragment key={i}>
+              <Grid size={2} sx={{ display: "flex", flexDirection: "column", borderRadius: 1 }} className="circuitDrawing">
+                <Box position="relative">
+                  <img src={comp.src} width="100%" />
+                  {i == 0 || userCircuit[i].name == "loadTerm" ? null : (
+                    <IconButton
+                      onClick={() => {
+                        setUserCircuit((z) => {
+                          var newZ = [
+                            ...z.slice(0, i), // Items before the index `i`
+                            ...z.slice(i + 1),
+                          ];
+                          //if sparam and last element is loadTerm, remove it
+                          if (c.name == "sparam" && newZ[newZ.length - 1].name == "loadTerm") {
+                            newZ = [...newZ.slice(0, -1)];
+                          }
+                          return newZ;
+                        });
+                      }}
+                      sx={{
+                        position: "absolute",
+                        top: -6,
+                        right: 0,
+                      }}
+                    >
+                      <DeleteIcon
+                        sx={{
+                          height: "16px",
+                          width: "16px",
+                          color: "rgba(0, 0, 0, 0.34)",
+                        }}
+                      />
+                    </IconButton>
+                  )}
+                  {i < 2 || (lastElIsFixed && i == userCircuit.length - 1) ? null : (
+                    <IconButton
+                      onClick={() => {
+                        setUserCircuit((z) => moveArrayItem(z, i, i - 1));
+                      }}
+                      sx={{
+                        position: "absolute",
+                        bottom: -6,
+                        left: 8,
+                      }}
+                    >
+                      <ArrowLeftRoundedIcon
+                        sx={{
+                          height: 32,
+                          width: 32,
+                          color: "rgba(0, 0, 0, 0.34)",
+                        }}
+                      />
+                    </IconButton>
+                  )}
+                  {i == 0 || i >= lastElement ? null : (
+                    <IconButton
+                      onClick={() => {
+                        setUserCircuit((z) => moveArrayItem(z, i, i + 1));
+                      }}
+                      sx={{
+                        position: "absolute",
+                        bottom: -6,
+                        right: 8,
+                      }}
+                    >
+                      <ArrowRightRoundedIcon
+                        sx={{
+                          height: 32,
+                          width: 32,
+                          color: "rgba(0, 0, 0, 0.34)",
+                        }}
+                      />
+                    </IconButton>
+                  )}
+                  <Typography
+                    variant="body2"
                     sx={{
                       position: "absolute",
-                      top: -6,
-                      right: 0,
+                      top: 0,
+                      left: 3,
+                      color: { color },
                     }}
                   >
-                    <DeleteIcon
-                      sx={{
-                        height: "16px",
-                        width: "16px",
-                        color: "rgba(0, 0, 0, 0.34)",
-                      }}
-                    />
-                  </IconButton>
-                )}
-                {i < 2 || (lastElIsFixed && i == userCircuit.length - 1) ? null : (
-                  <IconButton
-                    onClick={() => {
-                      setUserCircuit((z) => moveArrayItem(z, i, i - 1));
-                    }}
+                    {t("circuit.dp", { i })}
+                  </Typography>
+                </Box>
+                {comp.circuitInputs.map((input) => componentMap(input, c, i))}
+              </Grid>
+              {calPlaneDP !== null && calPlaneDP !== undefined && i === calPlaneDP && (
+                <Grid size="auto" sx={{ display: "flex", alignItems: "stretch" }}>
+                  <Box
                     sx={{
-                      position: "absolute",
-                      bottom: -6,
-                      left: 8,
+                      width: 4,
+                      alignSelf: "stretch",
+                      borderLeft: "3px dashed #c62828",
+                      mx: 0.5,
+                      position: "relative",
                     }}
                   >
-                    <ArrowLeftRoundedIcon
+                    <Typography
+                      variant="caption"
                       sx={{
-                        height: 32,
-                        width: 32,
-                        color: "rgba(0, 0, 0, 0.34)",
+                        position: "absolute",
+                        top: 0,
+                        left: 6,
+                        color: "#c62828",
+                        whiteSpace: "nowrap",
+                        fontSize: "0.6rem",
                       }}
-                    />
-                  </IconButton>
-                )}
-                {i == 0 || i >= lastElement ? null : (
-                  <IconButton
-                    onClick={() => {
-                      setUserCircuit((z) => moveArrayItem(z, i, i + 1));
-                    }}
-                    sx={{
-                      position: "absolute",
-                      bottom: -6,
-                      right: 8,
-                    }}
-                  >
-                    <ArrowRightRoundedIcon
-                      sx={{
-                        height: 32,
-                        width: 32,
-                        color: "rgba(0, 0, 0, 0.34)",
-                      }}
-                    />
-                  </IconButton>
-                )}
-                <Typography
-                  variant="body2"
-                  sx={{
-                    position: "absolute",
-                    top: 0,
-                    left: 3,
-                    color: { color },
-                  }}
-                >
-                  {t("circuit.dp", { i })}
-                </Typography>
-              </Box>
-              {comp.circuitInputs.map((input) => componentMap(input, c, i))}
-            </Grid>
+                    >
+                      Cal Plane
+                    </Typography>
+                  </Box>
+                </Grid>
+              )}
+            </React.Fragment>
           );
         })}
       </Grid>

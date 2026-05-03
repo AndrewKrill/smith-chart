@@ -275,9 +275,10 @@
       "fringe_c0": "Capacité de bord C0",
       "residual_l0": "Inductance résiduelle L0",
       "r_offset": "Résistance résiduelle",
-      "planeSectionTitle": "Décalage du plan de calibrage",
-      "planeLength": "Longueur de décalage",
-      "planeHint": "Le marqueur du plan de calibrage (ligne rouge tiretée) se met à jour sur l'abaque et le TDR."
+      "planeSectionTitle": "Calibration Plane",
+      "planeDPLabel": "Calibration plane",
+      "planeDPNone": "None",
+      "planeDPDesc": "Selecting DPn shows the reflection seen at that point, removing the effect of outer components"
     },
     "tabs": {
       "calibration": "Calibrage",
@@ -291,7 +292,8 @@
       "length": "Longueur",
       "delayInfo": "Retard aller-retour : {{delay}} ns",
       "desc": "Décale le plan de référence.",
-      "clear": "Effacer"
+      "clear": "Effacer",
+      "centerFreq": "center f"
     },
     "de": {
       "enabled": "De-embedding activé",
@@ -328,7 +330,13 @@
       "gate_nominal": "Nominal",
       "gate_wide": "Large",
       "gate_maximum": "Maximum",
-      "gateHint": "Modifier un champ met à jour les autres."
+      "gateHint": "Modifier un champ met à jour les autres.",
+      "synthSource": "Source: synthesized from component stackup",
+      "loadedSource": "Source: loaded S-parameter file",
+      "synthBandwidth": "Synthesis bandwidth",
+      "synthFmin": "Start frequency (Hz)",
+      "synthFmax": "Stop frequency (Hz)",
+      "synthPoints": "Points"
     },
     "unc": {
       "enabled": "Incertitude activée",

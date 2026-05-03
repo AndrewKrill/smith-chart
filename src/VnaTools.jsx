@@ -37,7 +37,7 @@ import Chip from "@mui/material/Chip";
 import UplotReact from "uplot-react";
 import "uplot/dist/uPlot.min.css";
 
-import { parseInput, speedOfLight, unitConverter } from "./commonFunctions.js";
+import { parseInput, parseSIInput, speedOfLight, unitConverter } from "./commonFunctions.js";
 import { frequencyToTimeDomain, applyGate, gateStartStopToCS, gateCsToStartStop, windowInfo, computeTdrResolution } from "./tdr.js";
 import { extensionDelay } from "./portExtension.js";
 
@@ -75,13 +75,7 @@ const lengthUnitOpts = ["m", "mm", "um", "deg", "λ"];
 function LengthInput({ label, value, unit, onChange, onUnitChange }) {
   return (
     <Box sx={{ display: "flex", gap: 1, alignItems: "center", flex: 1 }}>
-      <TextField
-        label={label}
-        size="small"
-        value={value}
-        onChange={(e) => onChange(parseInput(e.target.value))}
-        sx={{ flex: 1 }}
-      />
+      <TextField label={label} size="small" value={value} onChange={(e) => onChange(parseInput(e.target.value))} sx={{ flex: 1 }} />
       <Select size="small" value={unit} onChange={(e) => onUnitChange(e.target.value)} sx={{ minWidth: 60 }}>
         {lengthUnitOpts.map((u) => (
           <MenuItem key={u} value={u}>
@@ -98,7 +92,32 @@ function LengthInput({ label, value, unit, onChange, onUnitChange }) {
 // ---------------------------------------------------------------------------
 const CAL_TYPES = ["OSL", "OS", "OL", "SL", "O", "S", "L"];
 
-function CalibrationTab({ calSettings, setCalSettings }) {
+// Controlled input that stores a string locally and commits as SI base units on blur/Enter
+function SITextField({ label, siValue, multiplier, unit, onCommit, ...props }) {
+  const [localStr, setLocalStr] = useState(siValue != null ? String((siValue / multiplier).toPrecision(6).replace(/\.?0+$/, "")) : "0");
+  useEffect(() => {
+    setLocalStr(siValue != null ? String((siValue / multiplier).toPrecision(6).replace(/\.?0+$/, "")) : "0");
+  }, [siValue, multiplier]);
+  function commit() {
+    const parsed = parseFloat(parseInput(localStr));
+    onCommit(isNaN(parsed) ? 0 : parsed * multiplier);
+  }
+  return (
+    <TextField
+      {...props}
+      size="small"
+      label={label ? `${label} (${unit})` : undefined}
+      value={localStr}
+      onChange={(e) => setLocalStr(e.target.value)}
+      onBlur={commit}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") commit();
+      }}
+    />
+  );
+}
+
+function CalibrationTab({ calSettings, setCalSettings, circuitLength }) {
   const { t } = useTranslation();
   const cs = calSettings;
   const set = (key, val) => setCalSettings((s) => ({ ...s, [key]: val }));
@@ -125,12 +144,7 @@ function CalibrationTab({ calSettings, setCalSettings }) {
         <Row>
           <LabelCell>{t("vna.cal.calType")}</LabelCell>
           <FieldCell>
-            <ToggleButtonGroup
-              value={cs.calType}
-              exclusive
-              onChange={(_, v) => v && set("calType", v)}
-              size="small"
-            >
+            <ToggleButtonGroup value={cs.calType} exclusive onChange={(_, v) => v && set("calType", v)} size="small">
               {CAL_TYPES.map((ct) => (
                 <ToggleButton key={ct} value={ct}>
                   {ct}
@@ -168,12 +182,14 @@ function CalibrationTab({ calSettings, setCalSettings }) {
               {t("vna.cal.openStd")}
             </Typography>
             <Row>
-              <LabelCell size={4}>{t("vna.cal.fringe_c0")} (pF)</LabelCell>
+              <LabelCell size={4}>{t("vna.cal.fringe_c0")}</LabelCell>
               <FieldCell size={8}>
-                <TextField
-                  size="small"
-                  value={cs.standards?.openParams?.c0 ?? 0}
-                  onChange={(e) => setStd("openParams", { ...(cs.standards?.openParams || {}), c0: parseFloat(parseInput(e.target.value)) * 1e-12 })}
+                <SITextField
+                  label="C0"
+                  unit="pF"
+                  siValue={cs.standards?.openParams?.c0 ?? 0}
+                  multiplier={1e-12}
+                  onCommit={(v) => setStd("openParams", { ...(cs.standards?.openParams || {}), c0: v })}
                 />
               </FieldCell>
             </Row>
@@ -183,12 +199,14 @@ function CalibrationTab({ calSettings, setCalSettings }) {
               {t("vna.cal.shortStd")}
             </Typography>
             <Row>
-              <LabelCell size={4}>{t("vna.cal.residual_l0")} (pH)</LabelCell>
+              <LabelCell size={4}>{t("vna.cal.residual_l0")}</LabelCell>
               <FieldCell size={8}>
-                <TextField
-                  size="small"
-                  value={(cs.standards?.shortParams?.l0 ?? 0) * 1e12}
-                  onChange={(e) => setStd("shortParams", { ...(cs.standards?.shortParams || {}), l0: parseFloat(parseInput(e.target.value)) * 1e-12 })}
+                <SITextField
+                  label="L0"
+                  unit="pH"
+                  siValue={cs.standards?.shortParams?.l0 ?? 0}
+                  multiplier={1e-12}
+                  onCommit={(v) => setStd("shortParams", { ...(cs.standards?.shortParams || {}), l0: v })}
                 />
               </FieldCell>
             </Row>
@@ -198,12 +216,14 @@ function CalibrationTab({ calSettings, setCalSettings }) {
               {t("vna.cal.loadStd")}
             </Typography>
             <Row>
-              <LabelCell size={4}>{t("vna.cal.r_offset")} (Ω)</LabelCell>
+              <LabelCell size={4}>{t("vna.cal.r_offset")}</LabelCell>
               <FieldCell size={8}>
-                <TextField
-                  size="small"
-                  value={cs.standards?.loadParams?.r_offset ?? 0}
-                  onChange={(e) => setStd("loadParams", { ...(cs.standards?.loadParams || {}), r_offset: parseFloat(parseInput(e.target.value)) })}
+                <SITextField
+                  label="R"
+                  unit="Ω"
+                  siValue={cs.standards?.loadParams?.r_offset ?? 0}
+                  multiplier={1}
+                  onCommit={(v) => setStd("loadParams", { ...(cs.standards?.loadParams || {}), r_offset: v })}
                 />
               </FieldCell>
             </Row>
@@ -212,38 +232,31 @@ function CalibrationTab({ calSettings, setCalSettings }) {
 
         <Divider sx={{ my: 1 }} />
 
-        {/* Calibration plane offset */}
+        {/* Calibration plane selector */}
         <Typography variant="subtitle2" sx={{ mb: 1 }}>
           {t("vna.cal.planeSectionTitle")}
         </Typography>
         <Row>
-          <LabelCell>{t("vna.cal.planeLength")}</LabelCell>
+          <LabelCell>{t("vna.cal.planeDPLabel")}</LabelCell>
           <FieldCell>
-            <LengthInput
-              label={t("common.length")}
-              value={cs.planeLength}
-              unit={cs.planeLengthUnit}
-              onChange={(v) => set("planeLength", v)}
-              onUnitChange={(u) => set("planeLengthUnit", u)}
-            />
-            <TextField
-              label="Zo (Ω)"
+            <Select
               size="small"
-              value={cs.planeZo}
-              onChange={(e) => set("planeZo", parseInput(e.target.value))}
-              sx={{ width: 80 }}
-            />
-            <TextField
-              label="εeff"
-              size="small"
-              value={cs.planeEeff}
-              onChange={(e) => set("planeEeff", parseInput(e.target.value))}
-              sx={{ width: 80 }}
-            />
+              value={cs.planeDP ?? ""}
+              onChange={(e) => set("planeDP", e.target.value === "" ? null : Number(e.target.value))}
+              displayEmpty
+              sx={{ minWidth: 120 }}
+            >
+              <MenuItem value="">{t("vna.cal.planeDPNone")}</MenuItem>
+              {Array.from({ length: circuitLength }, (_, idx) => (
+                <MenuItem key={idx} value={idx}>
+                  DP{idx}
+                </MenuItem>
+              ))}
+            </Select>
           </FieldCell>
         </Row>
         <Alert severity="info" sx={{ mt: 1 }}>
-          {t("vna.cal.planeHint")}
+          {t("vna.cal.planeDPDesc")}
         </Alert>
       </Collapse>
     </Box>
@@ -253,7 +266,7 @@ function CalibrationTab({ calSettings, setCalSettings }) {
 // ---------------------------------------------------------------------------
 // Tab 2: Port Extension
 // ---------------------------------------------------------------------------
-function PortExtensionTab({ peSettings, setPeSettings }) {
+function PortExtensionTab({ peSettings, setPeSettings, centerFrequency }) {
   const { t } = useTranslation();
   const pe = peSettings;
   const set = (key, val) => setPeSettings((s) => ({ ...s, [key]: val }));
@@ -262,6 +275,13 @@ function PortExtensionTab({ peSettings, setPeSettings }) {
     const lenM = parseFloat(pe.length) * (unitConverter[pe.unit] || 1);
     return (extensionDelay(lenM, parseFloat(pe.eeff) || 1) * 1e9).toFixed(3);
   }, [pe.length, pe.unit, pe.eeff]);
+
+  const delayDeg = useMemo(() => {
+    if (!centerFrequency || centerFrequency <= 0) return null;
+    const lenM = parseFloat(pe.length) * (unitConverter[pe.unit] || 1);
+    const delay_s = extensionDelay(lenM, parseFloat(pe.eeff) || 1);
+    return (delay_s * centerFrequency * 360).toFixed(1);
+  }, [pe.length, pe.unit, pe.eeff, centerFrequency]);
 
   return (
     <Box>
@@ -286,25 +306,14 @@ function PortExtensionTab({ peSettings, setPeSettings }) {
               onChange={(v) => set("length", v)}
               onUnitChange={(u) => set("unit", u)}
             />
-            <TextField
-              label="Zo (Ω)"
-              size="small"
-              value={pe.zo}
-              onChange={(e) => set("zo", parseInput(e.target.value))}
-              sx={{ width: 80 }}
-            />
-            <TextField
-              label="εeff"
-              size="small"
-              value={pe.eeff}
-              onChange={(e) => set("eeff", parseInput(e.target.value))}
-              sx={{ width: 80 }}
-            />
+            <TextField label="Zo (Ω)" size="small" value={pe.zo} onChange={(e) => set("zo", parseInput(e.target.value))} sx={{ width: 80 }} />
+            <TextField label="εeff" size="small" value={pe.eeff} onChange={(e) => set("eeff", parseInput(e.target.value))} sx={{ width: 80 }} />
           </FieldCell>
         </Row>
 
         <Alert severity="info" sx={{ mt: 1 }}>
           {t("vna.pe.delayInfo", { delay: delayNs })}
+          {delayDeg !== null ? ` (${delayDeg}° at ${t("vna.pe.centerFreq")})` : ""}
         </Alert>
 
         <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: "block" }}>
@@ -344,12 +353,7 @@ function DeembedTab({ deembedSettings, setDeembedSettings }) {
         <Row>
           <LabelCell>{t("vna.de.mode")}</LabelCell>
           <FieldCell>
-            <ToggleButtonGroup
-              value={de.mode}
-              exclusive
-              onChange={(_, v) => v && set("mode", v)}
-              size="small"
-            >
+            <ToggleButtonGroup value={de.mode} exclusive onChange={(_, v) => v && set("mode", v)} size="small">
               <ToggleButton value="deembed">{t("vna.de.deembed")}</ToggleButton>
               <ToggleButton value="embed">{t("vna.de.embed")}</ToggleButton>
             </ToggleButtonGroup>
@@ -360,12 +364,7 @@ function DeembedTab({ deembedSettings, setDeembedSettings }) {
         <Row>
           <LabelCell>{t("vna.de.fixtureSource")}</LabelCell>
           <FieldCell>
-            <ToggleButtonGroup
-              value={de.fixtureType}
-              exclusive
-              onChange={(_, v) => v && set("fixtureType", v)}
-              size="small"
-            >
+            <ToggleButtonGroup value={de.fixtureType} exclusive onChange={(_, v) => v && set("fixtureType", v)} size="small">
               <ToggleButton value="tline">{t("vna.de.tline")}</ToggleButton>
               <ToggleButton value="sparam">{t("vna.de.sparam")}</ToggleButton>
             </ToggleButtonGroup>
@@ -424,24 +423,26 @@ const TDR_MODES = ["bandpass", "lowpass_impulse", "lowpass_step"];
 const TDR_WINDOWS = ["rectangular", "hamming", "hanning", "blackman", "kaiser6", "kaiser13"];
 const GATE_SHAPES = ["minimum", "nominal", "wide", "maximum"];
 
-function TdrTab({ tdrSettings, setTdrSettings, sparamData, zo }) {
+function TdrTab({ tdrSettings, setTdrSettings, sparamData, isSynthesized, zo }) {
   const { t } = useTranslation();
   const ts = tdrSettings;
   const set = (key, val) => setTdrSettings((s) => ({ ...s, [key]: val }));
   const containerRef = useRef(null);
   const [chartWidth, setChartWidth] = useState(500);
 
+  const hasData = sparamData && Object.keys(sparamData).length >= 2;
+
   // Compute TDR time-domain data
   const tdData = useMemo(() => {
-    if (!sparamData || Object.keys(sparamData).length < 2) return null;
+    if (!hasData) return null;
     return frequencyToTimeDomain(sparamData, ts.mode, ts.window);
-  }, [sparamData, ts.mode, ts.window]);
+  }, [sparamData, ts.mode, ts.window, hasData]);
 
   // Resolution info
   const resInfo = useMemo(() => {
-    if (!sparamData || Object.keys(sparamData).length < 2) return null;
+    if (!hasData) return null;
     return computeTdrResolution(sparamData, ts.window, ts.velocityFactor || 1);
-  }, [sparamData, ts.window, ts.velocityFactor]);
+  }, [sparamData, ts.window, ts.velocityFactor, hasData]);
 
   // Gated data
   const gatedData = useMemo(() => {
@@ -467,7 +468,7 @@ function TdrTab({ tdrSettings, setTdrSettings, sparamData, zo }) {
     // Impedance from reflection: Z = zo*(1+ρ)/(1−ρ), but clamp ρ < 1
     const zArr = mag.map((rho) => {
       const r = Math.min(rho, 0.9999);
-      return zo * (1 + r) / (1 - r);
+      return (zo * (1 + r)) / (1 - r);
     });
     // Shade gate region: build a gate indicator array (0 or 1)
     const gateArr = tNs.map((tn) => {
@@ -489,11 +490,7 @@ function TdrTab({ tdrSettings, setTdrSettings, sparamData, zo }) {
         { label: "|Γ(t)|", stroke: "#1f77b4", width: 2, scale: "y" },
         { label: "Z(t) (Ω)", stroke: "#ff7f0e", width: 1, scale: "y2" },
       ],
-      axes: [
-        { label: "Time (ns)" },
-        { scale: "y", label: "|Γ(t)|" },
-        { scale: "y2", side: 1, label: "Z(t) (Ω)" },
-      ],
+      axes: [{ label: "Time (ns)" }, { scale: "y", label: "|Γ(t)|" }, { scale: "y2", side: 1, label: "Z(t) (Ω)" }],
       scales: { x: { time: false }, y: { auto: true }, y2: { auto: true } },
     };
   }, [chartWidth, tdPlotData]);
@@ -530,12 +527,7 @@ function TdrTab({ tdrSettings, setTdrSettings, sparamData, zo }) {
         <Row>
           <LabelCell>{t("vna.tdr.mode")}</LabelCell>
           <FieldCell>
-            <ToggleButtonGroup
-              value={ts.mode}
-              exclusive
-              onChange={(_, v) => v && set("mode", v)}
-              size="small"
-            >
+            <ToggleButtonGroup value={ts.mode} exclusive onChange={(_, v) => v && set("mode", v)} size="small">
               <ToggleButton value="bandpass">{t("vna.tdr.bandpass")}</ToggleButton>
               <ToggleButton value="lowpass_impulse">{t("vna.tdr.lpImpulse")}</ToggleButton>
               <ToggleButton value="lowpass_step">{t("vna.tdr.lpStep")}</ToggleButton>
@@ -574,9 +566,58 @@ function TdrTab({ tdrSettings, setTdrSettings, sparamData, zo }) {
           </Alert>
         )}
 
-        {!sparamData || Object.keys(sparamData).length < 2 ? (
-          <Alert severity="warning">{t("vna.tdr.noData")}</Alert>
-        ) : (
+        {/* Source note + synthesis bandwidth controls */}
+        <Alert severity={isSynthesized ? "info" : "success"} sx={{ my: 1 }}>
+          {isSynthesized ? t("vna.tdr.synthSource") : t("vna.tdr.loadedSource")}
+        </Alert>
+
+        {isSynthesized && (
+          <Box sx={{ pl: 2, borderLeft: "3px solid #e0e0e0", mb: 1 }}>
+            <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 1 }}>
+              {t("vna.tdr.synthBandwidth")}
+            </Typography>
+            <Grid container spacing={1}>
+              <Grid size={{ xs: 12, sm: 4 }}>
+                <TextField
+                  label={t("vna.tdr.synthFmin")}
+                  size="small"
+                  value={ts.synthFmin ?? ""}
+                  onChange={(e) => {
+                    const v = e.target.value === "" ? null : parseFloat(parseInput(e.target.value));
+                    set("synthFmin", isNaN(v) ? null : v);
+                  }}
+                  fullWidth
+                />
+              </Grid>
+              <Grid size={{ xs: 12, sm: 4 }}>
+                <TextField
+                  label={t("vna.tdr.synthFmax")}
+                  size="small"
+                  value={ts.synthFmax ?? ""}
+                  onChange={(e) => {
+                    const v = e.target.value === "" ? null : parseFloat(parseInput(e.target.value));
+                    set("synthFmax", isNaN(v) ? null : v);
+                  }}
+                  fullWidth
+                />
+              </Grid>
+              <Grid size={{ xs: 12, sm: 4 }}>
+                <TextField
+                  label={t("vna.tdr.synthPoints")}
+                  size="small"
+                  value={ts.synthPoints ?? 201}
+                  onChange={(e) => {
+                    const v = parseInt(parseInput(e.target.value), 10);
+                    set("synthPoints", isNaN(v) ? 201 : Math.max(3, v));
+                  }}
+                  fullWidth
+                />
+              </Grid>
+            </Grid>
+          </Box>
+        )}
+
+        {hasData ? (
           <>
             {/* Time-domain plot */}
             <Typography variant="subtitle2" sx={{ mt: 2, mb: 1 }}>
@@ -667,12 +708,7 @@ function TdrTab({ tdrSettings, setTdrSettings, sparamData, zo }) {
               <Row>
                 <LabelCell>{t("vna.tdr.gateShape")}</LabelCell>
                 <FieldCell>
-                  <ToggleButtonGroup
-                    value={ts.gateShape}
-                    exclusive
-                    onChange={(_, v) => v && set("gateShape", v)}
-                    size="small"
-                  >
+                  <ToggleButtonGroup value={ts.gateShape} exclusive onChange={(_, v) => v && set("gateShape", v)} size="small">
                     {GATE_SHAPES.map((g) => (
                       <ToggleButton key={g} value={g}>
                         {t(`vna.tdr.gate_${g}`)}
@@ -687,7 +723,7 @@ function TdrTab({ tdrSettings, setTdrSettings, sparamData, zo }) {
               </Alert>
             </Collapse>
           </>
-        )}
+        ) : null}
       </Collapse>
     </Box>
   );
@@ -753,24 +789,46 @@ function UncertaintyTab({ uncertaintySettings, setUncertaintySettings }) {
 // ---------------------------------------------------------------------------
 // Main VnaTools component
 // ---------------------------------------------------------------------------
-export default function VnaTools({ calSettings, setCalSettings, peSettings, setPeSettings, deembedSettings, setDeembedSettings, tdrSettings, setTdrSettings, uncertaintySettings, setUncertaintySettings, sparamData, zo }) {
+export default function VnaTools({
+  calSettings,
+  setCalSettings,
+  peSettings,
+  setPeSettings,
+  deembedSettings,
+  setDeembedSettings,
+  tdrSettings,
+  setTdrSettings,
+  uncertaintySettings,
+  setUncertaintySettings,
+  sparamData,
+  isSynthesized,
+  circuitLength,
+  zo,
+  centerFrequency,
+}) {
   const { t } = useTranslation();
   const [tab, setTab] = useState(0);
   const [expanded, setExpanded] = useState(false);
 
   // Summarise active features for the accordion header chip
-  const activeCount = [calSettings.enabled, peSettings.enabled, deembedSettings.enabled, tdrSettings.enabled, uncertaintySettings.enabled].filter(Boolean).length;
+  const activeCount = [calSettings.enabled, peSettings.enabled, deembedSettings.enabled, tdrSettings.enabled, uncertaintySettings.enabled].filter(
+    Boolean,
+  ).length;
 
   return (
     <Accordion expanded={expanded} onChange={(_, isExp) => setExpanded(isExp)} sx={{ mt: 0 }}>
       <AccordionSummary expandIcon={<ExpandMoreIcon />}>
         <Typography sx={{ fontWeight: "bold", mr: 1 }}>{t("vna.title")}</Typography>
-        {activeCount > 0 && (
-          <Chip label={t("vna.activeCount", { n: activeCount })} size="small" color="primary" />
-        )}
+        {activeCount > 0 && <Chip label={t("vna.activeCount", { n: activeCount })} size="small" color="primary" />}
       </AccordionSummary>
       <AccordionDetails sx={{ pt: 0 }}>
-        <Tabs value={tab} onChange={(_, v) => setTab(v)} variant="scrollable" scrollButtons="auto" sx={{ mb: 2, borderBottom: 1, borderColor: "divider" }}>
+        <Tabs
+          value={tab}
+          onChange={(_, v) => setTab(v)}
+          variant="scrollable"
+          scrollButtons="auto"
+          sx={{ mb: 2, borderBottom: 1, borderColor: "divider" }}
+        >
           <Tab label={t("vna.tabs.calibration")} />
           <Tab label={t("vna.tabs.portExtension")} />
           <Tab label={t("vna.tabs.deembedding")} />
@@ -778,10 +836,12 @@ export default function VnaTools({ calSettings, setCalSettings, peSettings, setP
           <Tab label={t("vna.tabs.uncertainty")} />
         </Tabs>
 
-        {tab === 0 && <CalibrationTab calSettings={calSettings} setCalSettings={setCalSettings} />}
-        {tab === 1 && <PortExtensionTab peSettings={peSettings} setPeSettings={setPeSettings} />}
+        {tab === 0 && <CalibrationTab calSettings={calSettings} setCalSettings={setCalSettings} circuitLength={circuitLength} />}
+        {tab === 1 && <PortExtensionTab peSettings={peSettings} setPeSettings={setPeSettings} centerFrequency={centerFrequency} />}
         {tab === 2 && <DeembedTab deembedSettings={deembedSettings} setDeembedSettings={setDeembedSettings} />}
-        {tab === 3 && <TdrTab tdrSettings={tdrSettings} setTdrSettings={setTdrSettings} sparamData={sparamData} zo={zo} />}
+        {tab === 3 && (
+          <TdrTab tdrSettings={tdrSettings} setTdrSettings={setTdrSettings} sparamData={sparamData} isSynthesized={isSynthesized} zo={zo} />
+        )}
         {tab === 4 && <UncertaintyTab uncertaintySettings={uncertaintySettings} setUncertaintySettings={setUncertaintySettings} />}
       </AccordionDetails>
     </Accordion>

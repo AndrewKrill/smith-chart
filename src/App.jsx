@@ -28,7 +28,7 @@ import { syncObjectToUrl, updateObjectFromUrl } from "./urlFunctions.js"; // Imp
 import { theme, convertSettingsToFloat, unitConverter } from "./commonFunctions.js";
 import { circuitComponents } from "./circuitComponents.js";
 
-import { allImpedanceCalculations } from "./impedanceFunctions.js";
+import { allImpedanceCalculations, synthesizeS11FromCircuit } from "./impedanceFunctions.js";
 // import { sParamFrequencyRange } from "./sparam.js"; // Import the sParamFrequencyRange function
 
 import { applyCalibrationToDataset } from "./calibration.js";
@@ -60,10 +60,7 @@ const initialCalSettings = {
   calType: "OSL",
   useIdeal: true,
   standards: {},
-  planeLength: 0,
-  planeLengthUnit: "mm",
-  planeZo: 50,
-  planeEeff: 1,
+  planeDP: null,
 };
 
 const initialPeSettings = {
@@ -93,6 +90,9 @@ const initialTdrSettings = {
   gateStop: 1e-9,
   gateShape: "nominal",
   velocityFactor: 1,
+  synthPoints: 201,
+  synthFmin: null,
+  synthFmax: null,
 };
 
 const initialUncertaintySettings = {
@@ -144,8 +144,7 @@ function App() {
 
     // 1. Apply calibration
     if (calSettings.enabled) {
-      const planeLenM = parseFloat(calSettings.planeLength) * (unitConverter[calSettings.planeLengthUnit] || 1e-3);
-      data = applyCalibrationToDataset(data, { ...calSettings, planeLength: planeLenM }, zo);
+      data = applyCalibrationToDataset(data, calSettings, zo);
     }
 
     // 2. Apply port extension
@@ -176,27 +175,77 @@ function App() {
   const sParameters = sParamIndex === -1 ? null : correctedUserCircuit[correctedSParamIndex];
   const s1pIndex = userCircuit.findIndex((c) => c.type === "s1p");
   const chosenSparameter =
-    sParamIndex === -1 ? null : { ...correctedUserCircuit[correctedSParamIndex].data[numericalFrequency], zo: correctedUserCircuit[correctedSParamIndex].settings.zo };
+    sParamIndex === -1
+      ? null
+      : { ...correctedUserCircuit[correctedSParamIndex].data[numericalFrequency], zo: correctedUserCircuit[correctedSParamIndex].settings.zo };
   const chosenNoiseParameter = noiseFrequency === -1 ? null : userCircuit[sParamIndex].noise[noiseFrequency];
 
-  // TDR computation (uses corrected s-params)
+  // Synthesize S11 from the component circuit when no S-param file is loaded
+  const synthesizedSParamData = useMemo(() => {
+    const sParamIdx = userCircuit.findIndex((c) => c.name === "sparam");
+    if (sParamIdx !== -1) return null; // file loaded — no synthesis needed
+
+    const sf = convertSettingsToFloat(JSON.parse(JSON.stringify(settings)));
+    const centerF = sf.frequency * unitConverter[settings.frequencyUnit];
+    const fSpanHz = sf.fSpan * unitConverter[settings.fSpanUnit];
+    const nPoints = tdrSettings.synthPoints || 201;
+
+    let fMin, fMax;
+    if (tdrSettings.synthFmin !== null && tdrSettings.synthFmax !== null) {
+      fMin = tdrSettings.synthFmin;
+      fMax = tdrSettings.synthFmax;
+    } else if (fSpanHz > 0) {
+      fMin = Math.max(centerF - fSpanHz, 1);
+      fMax = centerF + fSpanHz;
+    } else {
+      // Default: ±50 % of centre frequency
+      fMin = centerF * 0.5;
+      fMax = centerF * 1.5;
+    }
+
+    const frequencies = [];
+    for (let i = 0; i < nPoints; i++) {
+      frequencies.push(fMin + (i * (fMax - fMin)) / (nPoints - 1));
+    }
+    return synthesizeS11FromCircuit(userCircuit, frequencies, sf.zo);
+  }, [userCircuit, settings, tdrSettings.synthPoints, tdrSettings.synthFmin, tdrSettings.synthFmax]);
+
+  // Port-extension applied to synthesized data (only when no S-param file)
+  const peAppliedSynData = useMemo(() => {
+    if (!synthesizedSParamData || !peSettings.enabled) return synthesizedSParamData;
+    const lenM = parseFloat(peSettings.length) * (unitConverter[peSettings.unit] || 1e-3);
+    if (!lenM || lenM === 0) return synthesizedSParamData;
+    return applyPortExtension(synthesizedSParamData, lenM, parseFloat(peSettings.eeff) || 1);
+  }, [synthesizedSParamData, peSettings]);
+
+  // Unified S-param data: loaded file (corrected) or synthesized circuit response
+  const effectiveSParamData = sParameters ? sParameters.data : peAppliedSynData;
+
+  // Calibration-plane synthesized trace: S11 of circuit truncated at planeDP
+  const calPlaneSynData = useMemo(() => {
+    if (!calSettings.enabled || calSettings.planeDP === null || calSettings.planeDP === undefined) return null;
+    const truncated = userCircuit.slice(0, calSettings.planeDP + 1);
+    if (truncated.length === 0) return null;
+    if (truncated.findIndex((c) => c.name === "sparam") !== -1) return null;
+    if (!synthesizedSParamData) return null;
+    const frequencies = Object.keys(synthesizedSParamData).map(Number);
+    const sf = convertSettingsToFloat(JSON.parse(JSON.stringify(settings)));
+    return synthesizeS11FromCircuit(truncated, frequencies, sf.zo);
+  }, [calSettings.enabled, calSettings.planeDP, userCircuit, synthesizedSParamData, settings]);
+
+  // TDR computation (uses corrected s-params or synthesized data)
   const tdrData = useMemo(() => {
-    if (!tdrSettings.enabled || !sParameters || !sParameters.data) return null;
-    if (Object.keys(sParameters.data).length < 2) return null;
-    return frequencyToTimeDomain(sParameters.data, tdrSettings.mode, tdrSettings.window);
-  }, [tdrSettings.enabled, tdrSettings.mode, tdrSettings.window, sParameters]);
+    if (!tdrSettings.enabled || !effectiveSParamData) return null;
+    if (Object.keys(effectiveSParamData).length < 2) return null;
+    return frequencyToTimeDomain(effectiveSParamData, tdrSettings.mode, tdrSettings.window);
+  }, [tdrSettings.enabled, tdrSettings.mode, tdrSettings.window, effectiveSParamData]);
 
   // Uncertainty bands
   const uncertaintyBands = useMemo(() => {
-    if (!uncertaintySettings.enabled || !sParameters || !sParameters.data) return null;
-    return computeUncertaintyBands(sParameters.data, settingsFloat.zo, uncertaintySettings);
-  }, [uncertaintySettings, sParameters, settingsFloat.zo]);
-
-  // Cal-plane electrical offset in metres (used by Graph for marker)
-  const calPlaneLength_m = useMemo(() => {
-    if (!calSettings.enabled || !calSettings.planeLength) return 0;
-    return parseFloat(calSettings.planeLength) * (unitConverter[calSettings.planeLengthUnit] || 1e-3);
-  }, [calSettings]);
+    if (!uncertaintySettings.enabled || !effectiveSParamData) return null;
+    const zo = parseFloat(settings.zo) || 50;
+    return computeUncertaintyBands(effectiveSParamData, zo, uncertaintySettings);
+  }, [uncertaintySettings, effectiveSParamData, settings.zo]);
 
   // Port extension length in metres (used by Graph for arc overlay)
   const peLength_m = useMemo(() => {
@@ -278,6 +327,7 @@ function App() {
                   setPlotType={setPlotType}
                   setSettings={setSettings}
                   showIdeal={showIdeal}
+                  calPlaneDP={calSettings.enabled ? calSettings.planeDP : null}
                 />
               </CardContent>
             </Card>
@@ -305,12 +355,13 @@ function App() {
                 nonIdealUsed={nonIdealUsed}
                 showIdeal={showIdeal}
                 setShowIdeal={setShowIdeal}
-                calPlaneLength_m={calPlaneLength_m}
-                calPlaneEeff={parseFloat(calSettings.planeEeff) || 1}
+                calPlaneSynData={calPlaneSynData}
+                calPlaneDP={calSettings.enabled ? calSettings.planeDP : null}
                 calPlaneEnabled={calSettings.enabled}
                 peLength_m={peLength_m}
                 peEeff={parseFloat(peSettings.eeff) || 1}
                 peEnabled={peSettings.enabled}
+                prePeSynData={sParameters ? null : synthesizedSParamData}
                 uncertaintyBands={uncertaintyBands}
                 gatedSParamData={gatedSParamData}
                 tdrData={tdrData}
@@ -369,8 +420,11 @@ function App() {
               setTdrSettings={setTdrSettings}
               uncertaintySettings={uncertaintySettings}
               setUncertaintySettings={setUncertaintySettings}
-              sparamData={sParameters ? sParameters.data : null}
+              sparamData={effectiveSParamData}
+              isSynthesized={!sParameters}
+              circuitLength={userCircuit.length}
               zo={settingsFloat.zo}
+              centerFrequency={numericalFrequency}
             />
           </Grid>
           <Grid size={12}>

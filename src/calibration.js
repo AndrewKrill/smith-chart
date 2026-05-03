@@ -11,7 +11,15 @@
  *   Γ_corrected = (Γ_measured − e00) / (e11·(Γ_measured − e00) + e10e01)
  */
 
-import { complex_add, complex_subtract, complex_multiply, one_over_complex, speedOfLight, polarToRectangular, rectangularToPolar } from "./commonFunctions.js";
+import {
+  complex_add,
+  complex_subtract,
+  complex_multiply,
+  one_over_complex,
+  speedOfLight,
+  polarToRectangular,
+  rectangularToPolar,
+} from "./commonFunctions.js";
 
 // ---------------------------------------------------------------------------
 // Standard reflection coefficient models
@@ -192,10 +200,10 @@ function _solveThreeTerm(s_open, s_short, s_load) {
   function solveRow(m, a) {
     // [e00 coeff, C coeff, e11 coeff, RHS]
     return [
-      { real: 1, imaginary: 0 },                                                                               // coeff of e00: 1
-      a,                                                                                                        // coeff of C: Γa
+      { real: 1, imaginary: 0 }, // coeff of e00: 1
+      a, // coeff of C: Γa
       { real: m.real * a.real - m.imaginary * a.imaginary, imaginary: m.real * a.imaginary + m.imaginary * a.real }, // coeff of e11: +Γm·Γa
-      m,                                                                                                        // RHS: Γm
+      m, // RHS: Γm
     ];
   }
 
@@ -211,12 +219,7 @@ function _solveThreeTerm(s_open, s_short, s_load) {
   const r2 = solveRow(Ml, Al);
 
   // Solve 3×3 complex system for [e00, C, e11]
-  const [e00, C, e11] = _solveCramer3x3(
-    [r0[0], r0[1], r0[2]],
-    [r1[0], r1[1], r1[2]],
-    [r2[0], r2[1], r2[2]],
-    [r0[3], r1[3], r2[3]],
-  );
+  const [e00, C, e11] = _solveCramer3x3([r0[0], r0[1], r0[2]], [r1[0], r1[1], r1[2]], [r2[0], r2[1], r2[2]], [r0[3], r1[3], r2[3]]);
 
   // Recover e10e01 = C + e00·e11
   const e10e01 = complex_add(C, complex_multiply(e00, e11));
@@ -358,11 +361,6 @@ export function applyCalibrationToDataset(sparamData, calSettings, zo) {
     };
 
     let errorTerms = computeErrorTerms(standards, calSettings.calType);
-
-    // Optionally shift calibration plane
-    if (calSettings.planeLength && calSettings.planeLength !== 0) {
-      errorTerms = moveCalPlane(errorTerms, calSettings.planeLength, calSettings.planeZo || zo, calSettings.planeEeff || 1, f);
-    }
 
     const rawS11Polar = point.S11;
     const rawS11Rect = polarToRectangular(rawS11Polar);
