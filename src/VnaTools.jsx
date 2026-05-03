@@ -38,6 +38,7 @@ import "uplot/dist/uPlot.min.css";
 import { parseInput, parseSIInput, speedOfLight, unitConverter } from "./commonFunctions.js";
 import { frequencyToTimeDomain, applyGate, gateStartStopToCS, gateCsToStartStop, windowInfo, computeTdrResolution } from "./tdr.js";
 import { extensionDelay } from "./portExtension.js";
+import { VNA_STAGES } from "./vnaStages.js";
 
 // ---------------------------------------------------------------------------
 // Small helpers
@@ -792,15 +793,9 @@ function UncertaintyTab({ uncertaintySettings, setUncertaintySettings }) {
 }
 
 // ---------------------------------------------------------------------------
-// Pipeline stage colour definitions (shared with VnaSmithChart)
+// Pipeline stage colour definitions — imported from shared module
 // ---------------------------------------------------------------------------
-const STAGE_DEFS = [
-  { key: "raw", labelKey: "vna.pipeline.stageRaw", color: "#9E9E9E" },
-  { key: "afterCal", labelKey: "vna.pipeline.stageAfterCal", color: "#FF7F0E" },
-  { key: "afterDeembed", labelKey: "vna.pipeline.stageAfterDeembed", color: "#17BECF" },
-  { key: "afterPe", labelKey: "vna.pipeline.stageAfterPe", color: "#0072B2" },
-  { key: "afterGating", labelKey: "vna.pipeline.stageAfterGating", color: "#2CA02C" },
-];
+const STAGE_DEFS = VNA_STAGES;
 
 // ---------------------------------------------------------------------------
 // Main VnaTools component

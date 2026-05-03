@@ -299,6 +299,11 @@ function App() {
     gating: tdrSettings.enabled && tdrSettings.gateEnabled,
   };
 
+  // zo of the loaded S-param file; used by VnaSmithChart for reflToZ conversion
+  const sParamZo = useMemo(() => {
+    return sParameters?.settings?.zo || rawSParametersObject?.settings?.zo || settingsFloat.zo;
+  }, [sParameters, rawSParametersObject, settingsFloat.zo]);
+
   // Is any VNA correction active on loaded S-param data?
   const anyVnaActive = rawSParamData != null && (activeStages.cal || activeStages.deembed || activeStages.pe || activeStages.gating);
 
@@ -426,7 +431,7 @@ function App() {
               <Card sx={{ padding: 0 }}>
                 <VnaSmithChart
                   zo={settingsFloat.zo}
-                  sParamZo={sParameters?.settings?.zo || rawSParametersObject?.settings?.zo || settingsFloat.zo}
+                  sParamZo={sParamZo}
                   intermediateTraces={intermediateTraces}
                   visibleStages={visibleStages}
                   setVisibleStages={setVisibleStages}

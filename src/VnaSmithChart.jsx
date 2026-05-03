@@ -18,17 +18,13 @@ import Stack from "@mui/material/Stack";
 import Divider from "@mui/material/Divider";
 
 import { polarToRectangular, reflToZ } from "./commonFunctions.js";
+import { VNA_STAGES } from "./vnaStages.js";
 
 // ---------------------------------------------------------------------------
-// Pipeline stage colour / dash definitions
+// Pipeline stage colour / dash definitions — imported from shared module
 // ---------------------------------------------------------------------------
-const STAGES = [
-  { key: "raw", color: "#9E9E9E", dash: "4,4", widthPx: 1.5, labelKey: "vna.pipeline.stageRaw" },
-  { key: "afterCal", color: "#FF7F0E", dash: "6,3", widthPx: 1.5, labelKey: "vna.pipeline.stageAfterCal" },
-  { key: "afterDeembed", color: "#17BECF", dash: "6,3", widthPx: 1.5, labelKey: "vna.pipeline.stageAfterDeembed" },
-  { key: "afterPe", color: "#0072B2", dash: null, widthPx: 2, labelKey: "vna.pipeline.stageAfterPe" },
-  { key: "afterGating", color: "#2CA02C", dash: "8,3", widthPx: 2, labelKey: "vna.pipeline.stageAfterGating" },
-];
+// (STAGES is the same as VNA_STAGES; local alias for readability)
+const STAGES = VNA_STAGES;
 
 // ---------------------------------------------------------------------------
 // Coordinate helpers (duplicated from Graph.jsx — pure math, no side effects)
