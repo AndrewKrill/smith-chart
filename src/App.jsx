@@ -37,6 +37,7 @@ import { applyDeembedding } from "./deembedding.js";
 import { frequencyToTimeDomain, applyGate, computeTdrResolution } from "./tdr.js";
 import { computeUncertaintyBands } from "./uncertainty.js";
 import VnaTools from "./VnaTools.jsx";
+import VnaSmithChart from "./VnaSmithChart.jsx";
 
 import debounce from "lodash/debounce";
 
@@ -124,6 +125,17 @@ function App() {
   const [tdrSettings, setTdrSettings] = useState(initialTdrSettings);
   const [uncertaintySettings, setUncertaintySettings] = useState(initialUncertaintySettings);
 
+  // Split-chart mode: processed data on its own second Smith chart
+  const [splitSmithChart, setSplitSmithChart] = useState(false);
+  // Which intermediate pipeline stages to display on the second Smith chart
+  const [visibleStages, setVisibleStages] = useState({
+    raw: true,
+    afterCal: true,
+    afterDeembed: true,
+    afterPe: true,
+    afterGating: true,
+  });
+
   const settingsFloat = convertSettingsToFloat(JSON.parse(JSON.stringify(settings)));
 
   //debounding the URL syncing because 100 updateHistory in 10s causes chrome to crash, which happens when using sliders
@@ -133,36 +145,45 @@ function App() {
     debouncedSync(settings, initialState, userCircuit, initialCircuit);
   }, [settings, userCircuit, debouncedSync]);
 
-  // Build a pipeline-corrected version of the s-param data for use throughout
+  // ---------------------------------------------------------------------------
+  // VNA correction pipeline — staged memos (order: Cal → Deembed → PE → Gating)
+  // ---------------------------------------------------------------------------
+
+  // Raw S-param data as loaded from file, before any corrections
+  const rawSParamData = useMemo(() => {
+    const idx = userCircuit.findIndex((c) => c.name === "sparam");
+    return idx === -1 ? null : userCircuit[idx].data;
+  }, [userCircuit]);
+
+  // Step 1: Calibration
+  const afterCalData = useMemo(() => {
+    if (!rawSParamData || !calSettings.enabled) return rawSParamData;
+    return applyCalibrationToDataset(rawSParamData, calSettings, settingsFloat.zo);
+  }, [rawSParamData, calSettings, settingsFloat.zo]);
+
+  // Step 2: De-embedding (before port extension; supports S1P and S2P)
+  const afterDeembedData = useMemo(() => {
+    if (!afterCalData || !deembedSettings.enabled) return afterCalData;
+    const fixLenM = parseFloat(deembedSettings.fixtureLength) * (unitConverter[deembedSettings.fixtureLengthUnit] || 1e-3);
+    return applyDeembedding(afterCalData, { ...deembedSettings, fixtureLength: fixLenM });
+  }, [afterCalData, deembedSettings]);
+
+  // Step 3: Port extension (after de-embedding)
+  const afterPeData = useMemo(() => {
+    if (!afterDeembedData || !peSettings.enabled) return afterDeembedData;
+    const lenM = parseFloat(peSettings.length) * (unitConverter[peSettings.unit] || 1e-3);
+    if (!lenM) return afterDeembedData;
+    return applyPortExtension(afterDeembedData, lenM, parseFloat(peSettings.eeff) || 1);
+  }, [afterDeembedData, peSettings]);
+
+  // Build a corrected userCircuit from the final processed data
   const correctedUserCircuit = useMemo(() => {
     const sParamIdx = userCircuit.findIndex((c) => c.name === "sparam");
-    if (sParamIdx === -1) return userCircuit;
-    if (!calSettings.enabled && !peSettings.enabled && !deembedSettings.enabled) return userCircuit;
-
-    const zo = settingsFloat.zo;
-    let data = { ...userCircuit[sParamIdx].data };
-
-    // 1. Apply calibration
-    if (calSettings.enabled) {
-      data = applyCalibrationToDataset(data, calSettings, zo);
-    }
-
-    // 2. Apply port extension
-    if (peSettings.enabled) {
-      const lenM = parseFloat(peSettings.length) * (unitConverter[peSettings.unit] || 1e-3);
-      data = applyPortExtension(data, lenM, parseFloat(peSettings.eeff) || 1);
-    }
-
-    // 3. Apply de-embedding (only for s2p)
-    if (deembedSettings.enabled && userCircuit[sParamIdx].type === "s2p") {
-      const fixLenM = parseFloat(deembedSettings.fixtureLength) * (unitConverter[deembedSettings.fixtureLengthUnit] || 1e-3);
-      data = applyDeembedding(data, { ...deembedSettings, fixtureLength: fixLenM });
-    }
-
+    if (sParamIdx === -1 || !afterPeData || afterPeData === rawSParamData) return userCircuit;
     const newCircuit = [...userCircuit];
-    newCircuit[sParamIdx] = { ...userCircuit[sParamIdx], data };
+    newCircuit[sParamIdx] = { ...userCircuit[sParamIdx], data: afterPeData };
     return newCircuit;
-  }, [userCircuit, calSettings, peSettings, deembedSettings, settingsFloat.zo]);
+  }, [userCircuit, afterPeData, rawSParamData]);
 
   const [processedImpedanceResults, spanResults, multiZResults, gainArray, noiseArray, numericalFrequency, RefIn, noiseFrequency] =
     allImpedanceCalculations(correctedUserCircuit, settingsFloat, showIdeal);
@@ -262,6 +283,36 @@ function App() {
       return null;
     }
   }, [tdrSettings, tdrData]);
+
+  // ---------------------------------------------------------------------------
+  // Split-chart helpers
+  // ---------------------------------------------------------------------------
+
+  // Original (uncorrected) sparam component, used as the primary chart source in split mode
+  const rawSParametersObject = sParamIndex === -1 ? null : userCircuit[sParamIndex];
+
+  // Which corrections are currently active (used by VnaSmithChart for legend filtering)
+  const activeStages = {
+    cal: calSettings.enabled,
+    deembed: deembedSettings.enabled,
+    pe: peSettings.enabled,
+    gating: tdrSettings.enabled && tdrSettings.gateEnabled,
+  };
+
+  // Is any VNA correction active on loaded S-param data?
+  const anyVnaActive = rawSParamData != null && (activeStages.cal || activeStages.deembed || activeStages.pe || activeStages.gating);
+
+  // Intermediate trace data keyed by stage name, for the second Smith chart
+  const intermediateTraces = {
+    raw: rawSParamData,
+    afterCal: activeStages.cal ? afterCalData : null,
+    afterDeembed: activeStages.deembed ? afterDeembedData : null,
+    afterPe: activeStages.pe ? afterPeData : null,
+    afterGating: activeStages.gating ? gatedSParamData : null,
+  };
+
+  // In overlay mode show the raw trace behind the corrected one on the primary chart
+  const backgroundSParamData = !splitSmithChart && anyVnaActive ? rawSParamData : null;
   // console.log("chosenNoiseParameter", chosenNoiseParameter);
 
   const handleSnackbarClick = () => {
@@ -347,7 +398,7 @@ function App() {
                 reflection_real={processedImpedanceResults.refReal}
                 reflection_imag={processedImpedanceResults.refImag}
                 plotType={plotType}
-                sParameters={sParameters}
+                sParameters={splitSmithChart ? rawSParametersObject : sParameters}
                 chosenSparameter={chosenSparameter}
                 freqUnit={settings.frequencyUnit}
                 frequency={numericalFrequency}
@@ -355,20 +406,35 @@ function App() {
                 nonIdealUsed={nonIdealUsed}
                 showIdeal={showIdeal}
                 setShowIdeal={setShowIdeal}
-                calPlaneSynData={calPlaneSynData}
+                calPlaneSynData={splitSmithChart ? null : calPlaneSynData}
                 calPlaneDP={calSettings.enabled ? calSettings.planeDP : null}
-                calPlaneEnabled={calSettings.enabled}
-                peLength_m={peLength_m}
+                calPlaneEnabled={splitSmithChart ? false : calSettings.enabled}
+                peLength_m={splitSmithChart ? 0 : peLength_m}
                 peEeff={parseFloat(peSettings.eeff) || 1}
-                peEnabled={peSettings.enabled}
-                prePeSynData={sParameters ? null : synthesizedSParamData}
-                uncertaintyBands={uncertaintyBands}
-                gatedSParamData={gatedSParamData}
+                peEnabled={splitSmithChart ? false : peSettings.enabled}
+                prePeSynData={splitSmithChart ? null : (sParameters ? null : synthesizedSParamData)}
+                uncertaintyBands={splitSmithChart ? null : uncertaintyBands}
+                gatedSParamData={splitSmithChart ? null : gatedSParamData}
                 tdrData={tdrData}
                 tdrSettings={tdrSettings}
+                backgroundSParamData={backgroundSParamData}
               />
             </Card>
           </Grid>
+          {splitSmithChart && anyVnaActive && (
+            <Grid size={{ xs: 12, sm: 12, md: 6, lg: 6 }}>
+              <Card sx={{ padding: 0 }}>
+                <VnaSmithChart
+                  zo={settingsFloat.zo}
+                  sParamZo={sParameters?.settings?.zo || rawSParametersObject?.settings?.zo || settingsFloat.zo}
+                  intermediateTraces={intermediateTraces}
+                  visibleStages={visibleStages}
+                  setVisibleStages={setVisibleStages}
+                  activeStages={activeStages}
+                />
+              </Card>
+            </Grid>
+          )}
           <Grid size={{ xs: 12, sm: 6, md: 6 }}>
             <Card>
               <CardContent>
@@ -425,6 +491,11 @@ function App() {
               circuitLength={userCircuit.length}
               zo={settingsFloat.zo}
               centerFrequency={numericalFrequency}
+              splitSmithChart={splitSmithChart}
+              setSplitSmithChart={setSplitSmithChart}
+              visibleStages={visibleStages}
+              setVisibleStages={setVisibleStages}
+              activeStages={activeStages}
             />
           </Grid>
           <Grid size={12}>

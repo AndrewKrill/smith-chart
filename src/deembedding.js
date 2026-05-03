@@ -175,14 +175,65 @@ export function embedSparams(dutSpPolar, fixtureSpPolar, fixture2SpPolar) {
 }
 
 // ---------------------------------------------------------------------------
+// 1-port (S1P) de-embedding helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * De-embed a 1-port DUT measurement through a 2-port fixture.
+ *
+ * Signal-flow-graph formula (1-port DUT at port 2 of fixture):
+ *   Γ_meas = S11_f + S21_f·S12_f·Γ_dut / (1 − S22_f·Γ_dut)
+ *
+ * Solving for Γ_dut:
+ *   Γ_dut = (Γ_meas − S11_f) / [S21_f·S12_f + (Γ_meas − S11_f)·S22_f]
+ *
+ * @param {{real,imaginary}} gammaMeasRect - measured Γ (rectangular)
+ * @param {{S11,S12,S21,S22}} fixtureSp - fixture S-params (polar)
+ * @returns {{real,imaginary}} de-embedded Γ_dut (rectangular)
+ */
+function deembed1Port(gammaMeasRect, fixtureSp) {
+  const S11_f = polarToRectangular(fixtureSp.S11);
+  const S21_f = polarToRectangular(fixtureSp.S21);
+  const S12_f = polarToRectangular(fixtureSp.S12);
+  const S22_f = polarToRectangular(fixtureSp.S22);
+  const num = complex_subtract(gammaMeasRect, S11_f);
+  const denom = complex_add(complex_multiply(S21_f, S12_f), complex_multiply(num, S22_f));
+  return complex_multiply(num, one_over_complex(denom));
+}
+
+/**
+ * Embed a 1-port DUT through a 2-port fixture.
+ *
+ *   Γ_out = S11_f + S21_f·S12_f·Γ_dut / (1 − S22_f·Γ_dut)
+ *
+ * @param {{real,imaginary}} gammaDutRect - DUT Γ (rectangular)
+ * @param {{S11,S12,S21,S22}} fixtureSp - fixture S-params (polar)
+ * @returns {{real,imaginary}} embedded Γ_out (rectangular)
+ */
+function embed1Port(gammaDutRect, fixtureSp) {
+  const S11_f = polarToRectangular(fixtureSp.S11);
+  const S21_f = polarToRectangular(fixtureSp.S21);
+  const S12_f = polarToRectangular(fixtureSp.S12);
+  const S22_f = polarToRectangular(fixtureSp.S22);
+  const one = { real: 1, imaginary: 0 };
+  const denom = complex_subtract(one, complex_multiply(S22_f, gammaDutRect));
+  const frac = complex_multiply(
+    complex_multiply(S21_f, S12_f),
+    complex_multiply(gammaDutRect, one_over_complex(denom)),
+  );
+  return complex_add(S11_f, frac);
+}
+
+// ---------------------------------------------------------------------------
 // Apply to full frequency-keyed dataset
 // ---------------------------------------------------------------------------
 
 /**
- * Apply de-embedding to a full frequency-keyed s2p dataset.
+ * Apply de-embedding (or embedding) to a full frequency-keyed s-param dataset.
+ * Supports both 2-port (S2P) and 1-port (S1P) data.
  * Fixture is either an ideal T-line or a frequency-keyed s2p data object.
  *
- * @param {Object} sparamData - frequency-keyed s2p data (polar)
+ * @param {Object} sparamData - frequency-keyed data (polar)
  * @param {{
  *   enabled: boolean,
  *   mode: "deembed"|"embed",
@@ -190,10 +241,15 @@ export function embedSparams(dutSpPolar, fixtureSpPolar, fixture2SpPolar) {
  *   fixtureLength: number, fixtureZo: number, fixtureEeff: number,
  *   fixtureData?: Object  (frequency-keyed s2p)
  * }} deembedSettings
- * @returns {Object} corrected frequency-keyed s2p data
+ * @returns {Object} corrected frequency-keyed data
  */
 export function applyDeembedding(sparamData, deembedSettings) {
   if (!deembedSettings || !deembedSettings.enabled) return sparamData;
+
+  // Detect S1P: points only have S11, no S21
+  const firstPoint = Object.values(sparamData)[0];
+  const isS1P = firstPoint && !firstPoint.S21;
+
   const result = {};
   for (const fStr in sparamData) {
     const f = Number(fStr);
@@ -203,7 +259,6 @@ export function applyDeembedding(sparamData, deembedSettings) {
     if (deembedSettings.fixtureType === "tline") {
       const T = tLineFixtureTMatrix(deembedSettings.fixtureLength || 0, deembedSettings.fixtureEeff || 1, f);
       const s = tToS(T);
-      // Convert rectangular to polar for the deembed function input
       fixtureSp = {
         S11: rectangularToPolar(s.S11),
         S12: rectangularToPolar(s.S12),
@@ -228,20 +283,27 @@ export function applyDeembedding(sparamData, deembedSettings) {
       continue;
     }
 
-    let corrected;
-    if (deembedSettings.mode === "embed") {
-      corrected = embedSparams(point, fixtureSp);
+    if (isS1P) {
+      // 1-port path: operate only on S11
+      const s11Rect = polarToRectangular(point.S11);
+      const correctedS11Rect = deembedSettings.mode === "embed" ? embed1Port(s11Rect, fixtureSp) : deembed1Port(s11Rect, fixtureSp);
+      result[fStr] = { ...point, S11: rectangularToPolar(correctedS11Rect) };
     } else {
-      corrected = deembedSparams(point, fixtureSp);
+      // 2-port path: full T-matrix cascade
+      let corrected;
+      if (deembedSettings.mode === "embed") {
+        corrected = embedSparams(point, fixtureSp);
+      } else {
+        corrected = deembedSparams(point, fixtureSp);
+      }
+      result[fStr] = {
+        ...point,
+        S11: rectangularToPolar(corrected.S11),
+        S12: rectangularToPolar(corrected.S12),
+        S21: rectangularToPolar(corrected.S21),
+        S22: rectangularToPolar(corrected.S22),
+      };
     }
-
-    result[fStr] = {
-      ...point,
-      S11: rectangularToPolar(corrected.S11),
-      S12: rectangularToPolar(corrected.S12),
-      S21: rectangularToPolar(corrected.S21),
-      S22: rectangularToPolar(corrected.S22),
-    };
   }
   return result;
 }

@@ -102,6 +102,8 @@ function Graph({
   gatedSParamData,
   tdrData,
   tdrSettings,
+  // Background (raw/uncorrected) trace shown in overlay mode
+  backgroundSParamData,
 }) {
   const { t } = useTranslation();
   const svgRef = useRef(null);
@@ -219,7 +221,37 @@ function Graph({
     setSSnaps([]);
     if (sParameters === null) return;
     const sparametersData = sParameters.data;
-    // if (sparametersData.length === 0) return;
+
+    // Draw background (raw/uncorrected) trace when in overlay correction mode
+    if (backgroundSParamData) {
+      const bgRefZo = sParameters?.settings?.zo || zo;
+      for (const s in sParamColorLut) {
+        const firstBgVal = Object.values(backgroundSParamData)[0];
+        if (!firstBgVal || !(s in firstBgVal)) continue;
+        if (showSPlots[s] === false) continue;
+        const bgCoord = [];
+        for (const v in backgroundSParamData) {
+          const pt = backgroundSParamData[v];
+          if (!pt[s]) continue;
+          let rect = polarToRectangular(pt[s]);
+          if (conjugateSParams) rect = { real: rect.real, imaginary: -rect.imaginary };
+          const z = reflToZ(rect, bgRefZo);
+          bgCoord.push(impedanceToSmithChart(z.real / zo, z.imaginary / zo, width));
+        }
+        if (bgCoord.length < 2) continue;
+        const bgPath = `M ${bgCoord[0][0]} ${bgCoord[0][1]} ${bgCoord.map((c) => `L ${c[0]} ${c[1]}`).join(" ")}`;
+        userSVG
+          .append("path")
+          .attr("stroke-linecap", "round")
+          .attr("stroke-linejoin", "round")
+          .attr("fill", "none")
+          .attr("stroke", "rgba(150,150,150,0.5)")
+          .attr("stroke-width", 1.5)
+          .attr("stroke-dasharray", "4,3")
+          .attr("id", `bg_arc_${s}`)
+          .attr("d", bgPath);
+      }
+    }
 
     for (const s in sParamColorLut) {
       const coord = [];
@@ -236,13 +268,6 @@ function Graph({
         addDpMarker(userSVG, x, y, `${s}_${v}`, z, sParamColorLut[s], v, sParamSnap, markerRadiusSP, `sparam_dp_${sParamSnap.length}`);
 
         coord.push([x, y]);
-        // sParamSnap.push({
-        //   x: x - 0.5 * markerRadius,
-        //   y: y - 0.5 * markerRadius,
-        //   real: z.real,
-        //   imaginary: z.imaginary,
-        //   frequency: v.toLocaleString(),
-        // });
       }
 
       const newPath = `M ${coord[0][0]} ${coord[0][1]} ${coord.map((c) => `L ${c[0]} ${c[1]}`).join(" ")}`;
@@ -255,22 +280,10 @@ function Graph({
         .attr("stroke-width", 1)
         .attr("id", `arc_${s}`)
         .attr("d", newPath);
-
-      // userSVG
-      //   .append("text")
-      //   .attr("x", -width) // x position
-      //   .attr("y", s.labelY) // y position
-      //   .text(s.name) // label content
-      //   .attr("font-size", "22px")
-      //   .attr("font-weight", "bold")
-      //   .attr("fill", s.color)
-      //   .attr("stroke", "none")
-      //   .attr("text-anchor", "start")
-      //   .attr("dominant-baseline", "hanging");
     }
 
     setSSnaps(sParamSnap);
-  }, [zo, width, plotType, sParameters, showSPlots, conjugateSParams]);
+  }, [zo, width, plotType, sParameters, showSPlots, conjugateSParams, backgroundSParamData]);
 
   //draw the custom markers
   useEffect(() => {
