@@ -275,9 +275,10 @@
       "fringe_c0": "边缘电容 C0",
       "residual_l0": "残余电感 L0",
       "r_offset": "残余电阻",
-      "planeSectionTitle": "校准面偏移",
-      "planeLength": "偏移长度",
-      "planeHint": "校准面标记（红色虚线）将在史密斯圆图和 TDR 图上更新。"
+      "planeSectionTitle": "Calibration Plane",
+      "planeDPLabel": "Calibration plane",
+      "planeDPNone": "None",
+      "planeDPDesc": "Selecting DPn shows the reflection seen at that point, removing the effect of outer components"
     },
     "tabs": {
       "calibration": "校准",
@@ -291,7 +292,8 @@
       "length": "延伸长度",
       "delayInfo": "双向电延迟：{{delay}} ns",
       "desc": "端口延伸通过添加电延迟来移动参考面。",
-      "clear": "清除延伸"
+      "clear": "清除延伸",
+      "centerFreq": "center f"
     },
     "de": {
       "enabled": "去嵌入已启用",
@@ -328,7 +330,13 @@
       "gate_nominal": "标准",
       "gate_wide": "宽",
       "gate_maximum": "最大",
-      "gateHint": "编辑任一字段将自动更新其余字段。"
+      "gateHint": "编辑任一字段将自动更新其余字段。",
+      "synthSource": "Source: synthesized from component stackup",
+      "loadedSource": "Source: loaded S-parameter file",
+      "synthBandwidth": "Synthesis bandwidth",
+      "synthFmin": "Start frequency (Hz)",
+      "synthFmax": "Stop frequency (Hz)",
+      "synthPoints": "Points"
     },
     "unc": {
       "enabled": "不确定度已启用",

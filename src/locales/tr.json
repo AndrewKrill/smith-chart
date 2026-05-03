@@ -275,9 +275,10 @@
       "fringe_c0": "Saçak kapasitansı C0",
       "residual_l0": "Artık indüktans L0",
       "r_offset": "Artık direnç",
-      "planeSectionTitle": "Kalibrasyon düzlemi ofseti",
-      "planeLength": "Ofset uzunluğu",
-      "planeHint": "Kalibrasyon düzlemi işaretçisi (kırmızı kesikli çizgi) Smith şeması ve TDR grafiğinde güncellenecektir."
+      "planeSectionTitle": "Calibration Plane",
+      "planeDPLabel": "Calibration plane",
+      "planeDPNone": "None",
+      "planeDPDesc": "Selecting DPn shows the reflection seen at that point, removing the effect of outer components"
     },
     "tabs": {
       "calibration": "Kalibrasyon",
@@ -291,7 +292,8 @@
       "length": "Uzatma uzunluğu",
       "delayInfo": "Gidiş-dönüş elektriksel gecikme: {{delay}} ns",
       "desc": "Port uzatma, referans düzlemini elektriksel gecikme ekleyerek kaydırır.",
-      "clear": "Uzatmayı temizle"
+      "clear": "Uzatmayı temizle",
+      "centerFreq": "center f"
     },
     "de": {
       "enabled": "Sökme etkin",
@@ -328,7 +330,13 @@
       "gate_nominal": "Nominal",
       "gate_wide": "Geniş",
       "gate_maximum": "Maksimum",
-      "gateHint": "Herhangi bir alanı düzenlemek diğerlerini otomatik günceller."
+      "gateHint": "Herhangi bir alanı düzenlemek diğerlerini otomatik günceller.",
+      "synthSource": "Source: synthesized from component stackup",
+      "loadedSource": "Source: loaded S-parameter file",
+      "synthBandwidth": "Synthesis bandwidth",
+      "synthFmin": "Start frequency (Hz)",
+      "synthFmax": "Stop frequency (Hz)",
+      "synthPoints": "Points"
     },
     "unc": {
       "enabled": "Belirsizlik etkin",

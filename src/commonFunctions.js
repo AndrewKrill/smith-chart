@@ -78,6 +78,20 @@ export function parseInput(input) {
   }
 }
 
+// Parse a numeric string that may include an SI suffix (p/n/u/µ/m/k/M/G).
+// Returns the value in SI base units.
+// Examples: "10p" → 10e-12, "20n" → 20e-9, "4.7u" → 4.7e-6, "100" → 100
+export function parseSIInput(str) {
+  if (typeof str !== "string") return parseFloat(str) || 0;
+  const s = str.trim();
+  const match = s.match(/^([+-]?[0-9]*\.?[0-9]+(?:[eE][+-]?[0-9]+)?)([pnuµmkMG]?)$/);
+  if (!match) return parseFloat(s) || 0;
+  const value = parseFloat(match[1]);
+  const suffix = match[2];
+  const multipliers = { p: 1e-12, n: 1e-9, u: 1e-6, µ: 1e-6, m: 1e-3, k: 1e3, M: 1e6, G: 1e9 };
+  return value * (multipliers[suffix] ?? 1);
+}
+
 export const inductorUnits = {
   H: 1,
   mH: 1e-3,

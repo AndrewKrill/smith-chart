@@ -228,7 +228,11 @@
     "version": "Version",
     "date": "Date",
     "notes": "Notes",
-    "v21": ["Added s-parameter component", "Added gain circles for turning s2p gain", "Added a couple of s-parameter tutorials"],
+    "v21": [
+      "Added s-parameter component",
+      "Added gain circles for turning s2p gain",
+      "Added a couple of s-parameter tutorials"
+    ],
     "v20a": "Site moved from will-kelsey.com/smith_chart/ to onlinesmithchart.com",
     "v20b": "Whole site re-written. Over 6 years many features were added to the old site which left the code very messy. Some users were looking at the code to verify implementations, which was tough. Now, the code is much more organised and optimized. In the future I hope the community can add features and improvements to the codebase.",
     "v20c": "Moved from vanilla JS to React + MUI. This allows: running lint, more maintainable code, smaller file size, many micro-benefits from joining the mainstream",
@@ -271,9 +275,10 @@
       "fringe_c0": "Fringe capacitance C0",
       "residual_l0": "Residual inductance L0",
       "r_offset": "Residual resistance",
-      "planeSectionTitle": "Calibration Plane Offset",
-      "planeLength": "Offset length",
-      "planeHint": "The calibration plane marker (red dashed line) on the Smith chart and TDR plot will update as you change the offset length."
+      "planeSectionTitle": "Calibration Plane",
+      "planeDPLabel": "Calibration plane",
+      "planeDPNone": "None",
+      "planeDPDesc": "Selecting DPn shows the reflection seen at that point, removing the effect of outer components"
     },
     "tabs": {
       "calibration": "Calibration",
@@ -287,7 +292,8 @@
       "length": "Extension length",
       "delayInfo": "Two-way electrical delay: {{delay}} ns",
       "desc": "Port extension shifts the reference plane by adding an electrical delay. The original (pre-extension) trace is shown as a dashed overlay on the Smith chart.",
-      "clear": "Clear extension"
+      "clear": "Clear extension",
+      "centerFreq": "center f"
     },
     "de": {
       "enabled": "De-embedding enabled",
@@ -324,7 +330,13 @@
       "gate_nominal": "Nominal",
       "gate_wide": "Wide",
       "gate_maximum": "Maximum",
-      "gateHint": "Editing any of Start / Stop / Center / Span automatically updates the others. The gate region is shaded on the time-domain plot."
+      "gateHint": "Editing any of Start / Stop / Center / Span automatically updates the others. The gate region is shaded on the time-domain plot.",
+      "synthSource": "Source: synthesized from component stackup",
+      "loadedSource": "Source: loaded S-parameter file",
+      "synthBandwidth": "Synthesis bandwidth",
+      "synthFmin": "Start frequency (Hz)",
+      "synthFmax": "Stop frequency (Hz)",
+      "synthPoints": "Points"
     },
     "unc": {
       "enabled": "Uncertainty enabled",

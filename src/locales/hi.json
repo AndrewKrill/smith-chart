@@ -275,9 +275,10 @@
       "fringe_c0": "फ्रिंज कैपेसिटेंस C0",
       "residual_l0": "अवशिष्ट इंडक्टेंस L0",
       "r_offset": "अवशिष्ट प्रतिरोध",
-      "planeSectionTitle": "अंशांकन तल ऑफसेट",
-      "planeLength": "ऑफसेट लंबाई",
-      "planeHint": "अंशांकन तल मार्कर (लाल धराशायी रेखा) स्मिथ चार्ट और TDR प्लॉट पर अपडेट होगा।"
+      "planeSectionTitle": "Calibration Plane",
+      "planeDPLabel": "Calibration plane",
+      "planeDPNone": "None",
+      "planeDPDesc": "Selecting DPn shows the reflection seen at that point, removing the effect of outer components"
     },
     "tabs": {
       "calibration": "अंशांकन",
@@ -291,7 +292,8 @@
       "length": "विस्तार लंबाई",
       "delayInfo": "द्विमार्गी विद्युत विलंब: {{delay}} ns",
       "desc": "पोर्ट विस्तार विद्युत विलंब जोड़कर संदर्भ तल को स्थानांतरित करता है।",
-      "clear": "विस्तार साफ़ करें"
+      "clear": "विस्तार साफ़ करें",
+      "centerFreq": "center f"
     },
     "de": {
       "enabled": "डी-एम्बेडिंग सक्षम",
@@ -328,7 +330,13 @@
       "gate_nominal": "सामान्य",
       "gate_wide": "चौड़ा",
       "gate_maximum": "अधिकतम",
-      "gateHint": "किसी भी फ़ील्ड को संपादित करने पर अन्य स्वतः अपडेट होते हैं।"
+      "gateHint": "किसी भी फ़ील्ड को संपादित करने पर अन्य स्वतः अपडेट होते हैं।",
+      "synthSource": "Source: synthesized from component stackup",
+      "loadedSource": "Source: loaded S-parameter file",
+      "synthBandwidth": "Synthesis bandwidth",
+      "synthFmin": "Start frequency (Hz)",
+      "synthFmax": "Stop frequency (Hz)",
+      "synthPoints": "Points"
     },
     "unc": {
       "enabled": "अनिश्चितता सक्षम",

@@ -296,6 +296,38 @@ function impedanceAtFrequency(circuit, frequency, showIdeal = false) {
   return span_tol_final[span_tol_final.length - 1];
 }
 
+/**
+ * Synthesize a frequency-keyed S11 dataset from a pure component circuit.
+ * Returns the same format as loaded S-param data: { "Hz": { S11: { magnitude, angle } }, ... }
+ * Returns null if the circuit contains an S-param component.
+ *
+ * @param {Array} circuit - userCircuit array (no S-param component)
+ * @param {number[]} frequencies - array of frequencies in Hz
+ * @param {number} zo - reference impedance
+ * @returns {Object|null}
+ */
+export function synthesizeS11FromCircuit(circuit, frequencies, zo) {
+  if (!circuit || circuit.length === 0 || frequencies.length === 0) return null;
+  const sParamIdx = circuit.findIndex((c) => c.name === "sparam");
+  if (sParamIdx !== -1) return null;
+
+  // Preprocess the circuit once (string→float, sliders, λ→m using mid-frequency as reference)
+  let c = convertStrToFloat(JSON.parse(JSON.stringify(circuit)));
+  c = applySliders(c);
+  const refFreq = frequencies[Math.floor(frequencies.length / 2)] || frequencies[0] || 1e9;
+  c = convertLengthToM(c, refFreq);
+
+  const result = {};
+  const zoRect = { real: zo, imaginary: 0 };
+  for (const f of frequencies) {
+    const z = impedanceAtFrequency(c, f);
+    const gamma = zToRefl(z, zoRect);
+    const polar = rectangularToPolar(gamma);
+    result[String(f)] = { S11: { magnitude: polar.magnitude, angle: polar.angle } };
+  }
+  return result;
+}
+
 export function allImpedanceCalculations(userCircuit, settings, showIdeal = false) {
   //get index of sparam in userCircuit
   // const sParametersSearch = userCircuit.filter((c) => c.name === "sparam");

@@ -228,7 +228,11 @@
     "version": "Versión",
     "date": "Fecha",
     "notes": "Notas",
-    "v21": ["Componente de parámetros S", "Círculos de ganancia para ganancia s2p", "Varios tutoriales de parámetros S"],
+    "v21": [
+      "Componente de parámetros S",
+      "Círculos de ganancia para ganancia s2p",
+      "Varios tutoriales de parámetros S"
+    ],
     "v20a": "El sitio pasó de will-kelsey.com/smith_chart/ a onlinesmithchart.com",
     "v20b": "Reescritura completa del sitio. En más de seis años se añadieron muchas funciones y el código antiguo quedó desordenado. Algunos usuarios revisaban el código para verificar la implementación, lo cual era difícil. Ahora el código está más organizado y optimizado. Espero que la comunidad pueda añadir funciones y mejoras.",
     "v20c": "Migración de JavaScript vanilla a React + MUI: lint, código más mantenible, archivos más pequeños y otras ventajas del ecosistema principal",
@@ -271,9 +275,10 @@
       "fringe_c0": "Capacitancia de borde C0",
       "residual_l0": "Inductancia residual L0",
       "r_offset": "Resistencia residual",
-      "planeSectionTitle": "Desplazamiento del plano de calibración",
-      "planeLength": "Longitud de desplazamiento",
-      "planeHint": "El marcador del plano de calibración (línea roja discontinua) se actualiza en la carta de Smith y en el gráfico TDR."
+      "planeSectionTitle": "Calibration Plane",
+      "planeDPLabel": "Calibration plane",
+      "planeDPNone": "None",
+      "planeDPDesc": "Selecting DPn shows the reflection seen at that point, removing the effect of outer components"
     },
     "tabs": {
       "calibration": "Calibración",
@@ -287,7 +292,8 @@
       "length": "Longitud de extensión",
       "delayInfo": "Retardo eléctrico de ida y vuelta: {{delay}} ns",
       "desc": "La extensión de puerto desplaza el plano de referencia añadiendo retardo eléctrico.",
-      "clear": "Eliminar extensión"
+      "clear": "Eliminar extensión",
+      "centerFreq": "center f"
     },
     "de": {
       "enabled": "De-embedding habilitado",
@@ -324,7 +330,13 @@
       "gate_nominal": "Nominal",
       "gate_wide": "Ancha",
       "gate_maximum": "Máxima",
-      "gateHint": "Editar Inicio / Fin / Centro / Amplitud actualiza automáticamente los demás valores."
+      "gateHint": "Editar Inicio / Fin / Centro / Amplitud actualiza automáticamente los demás valores.",
+      "synthSource": "Source: synthesized from component stackup",
+      "loadedSource": "Source: loaded S-parameter file",
+      "synthBandwidth": "Synthesis bandwidth",
+      "synthFmin": "Start frequency (Hz)",
+      "synthFmax": "Stop frequency (Hz)",
+      "synthPoints": "Points"
     },
     "unc": {
       "enabled": "Incertidumbre habilitada",

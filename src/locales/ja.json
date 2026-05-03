@@ -275,9 +275,10 @@
       "fringe_c0": "フリンジキャパシタンス C0",
       "residual_l0": "残留インダクタンス L0",
       "r_offset": "残留抵抗",
-      "planeSectionTitle": "校正面オフセット",
-      "planeLength": "オフセット長",
-      "planeHint": "校正面マーカー（赤破線）がスミスチャートと TDR プロットで更新されます。"
+      "planeSectionTitle": "Calibration Plane",
+      "planeDPLabel": "Calibration plane",
+      "planeDPNone": "None",
+      "planeDPDesc": "Selecting DPn shows the reflection seen at that point, removing the effect of outer components"
     },
     "tabs": {
       "calibration": "校正",
@@ -291,7 +292,8 @@
       "length": "延長長",
       "delayInfo": "往復電気遅延：{{delay}} ns",
       "desc": "ポート延長は電気遅延を追加して参照面を移動させます。",
-      "clear": "延長をクリア"
+      "clear": "延長をクリア",
+      "centerFreq": "center f"
     },
     "de": {
       "enabled": "取り外しを有効化",
@@ -328,7 +330,13 @@
       "gate_nominal": "標準",
       "gate_wide": "広い",
       "gate_maximum": "最大",
-      "gateHint": "いずれかのフィールドを編集すると他のフィールドが自動更新されます。"
+      "gateHint": "いずれかのフィールドを編集すると他のフィールドが自動更新されます。",
+      "synthSource": "Source: synthesized from component stackup",
+      "loadedSource": "Source: loaded S-parameter file",
+      "synthBandwidth": "Synthesis bandwidth",
+      "synthFmin": "Start frequency (Hz)",
+      "synthFmax": "Stop frequency (Hz)",
+      "synthPoints": "Points"
     },
     "unc": {
       "enabled": "不確かさを有効化",
