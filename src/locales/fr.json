@@ -345,6 +345,18 @@
       "desc": "Bandes d'incertitude sur les graphiques S11 et ellipses sur l'abaque.",
       "plotTitle": "S11 ±incertitude",
       "maxUnc": "Incertitude max : ±{{v}} dB à {{f}} {{unit}} (dominante : {{src}})"
+    },
+    "pipeline": {
+      "splitChart": "Show corrections on second chart",
+      "splitChartDesc": "When on, the corrected data is shown on a dedicated second Smith chart. When off, corrections are overlaid on the main chart.",
+      "visibleStages": "Visible correction stages",
+      "stageRaw": "Raw (uncorrected)",
+      "stageAfterCal": "After calibration",
+      "stageAfterDeembed": "After de-embedding",
+      "stageAfterPe": "After port extension",
+      "stageAfterGating": "After gating",
+      "orderNote": "Pipeline order: Calibration → De-embedding → Port Extension → Gating",
+      "correctedChartTitle": "Corrected S-parameters"
     }
   }
 }

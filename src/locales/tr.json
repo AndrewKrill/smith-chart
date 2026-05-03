@@ -345,6 +345,18 @@
       "desc": "Belirsizlik bantları tüm S11 büyüklük grafiklerinde ve Smith şemasında elips olarak gösterilir.",
       "plotTitle": "S11 ±belirsizlik bantları",
       "maxUnc": "Maks belirsizlik: ±{{v}} dB, {{f}} {{unit}} (baskın: {{src}})"
+    },
+    "pipeline": {
+      "splitChart": "Show corrections on second chart",
+      "splitChartDesc": "When on, the corrected data is shown on a dedicated second Smith chart. When off, corrections are overlaid on the main chart.",
+      "visibleStages": "Visible correction stages",
+      "stageRaw": "Raw (uncorrected)",
+      "stageAfterCal": "After calibration",
+      "stageAfterDeembed": "After de-embedding",
+      "stageAfterPe": "After port extension",
+      "stageAfterGating": "After gating",
+      "orderNote": "Pipeline order: Calibration → De-embedding → Port Extension → Gating",
+      "correctedChartTitle": "Corrected S-parameters"
     }
   }
 }

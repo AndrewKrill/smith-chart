@@ -345,6 +345,18 @@
       "desc": "Uncertainty bands (shaded) are shown on all S11 magnitude plots and as ellipses around frequency points on the Smith chart. Dominant error source and worst-case uncertainty are summarised below each plot.",
       "plotTitle": "S11 with ±Uncertainty Bands",
       "maxUnc": "Max uncertainty: ±{{v}} dB at {{f}} {{unit}} (dominant: {{src}})"
+    },
+    "pipeline": {
+      "splitChart": "Show corrections on second chart",
+      "splitChartDesc": "When on, the corrected data is shown on a dedicated second Smith chart. When off, corrections are overlaid on the main chart.",
+      "visibleStages": "Visible correction stages",
+      "stageRaw": "Raw (uncorrected)",
+      "stageAfterCal": "After calibration",
+      "stageAfterDeembed": "After de-embedding",
+      "stageAfterPe": "After port extension",
+      "stageAfterGating": "After gating",
+      "orderNote": "Pipeline order: Calibration → De-embedding → Port Extension → Gating",
+      "correctedChartTitle": "Corrected S-parameters"
     }
   }
 }

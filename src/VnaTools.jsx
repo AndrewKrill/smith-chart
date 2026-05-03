@@ -1,10 +1,7 @@
 /**
  * VnaTools.jsx
- * A collapsible panel with 4 tabs for teaching VNA concepts:
- *   1. Calibration (SOLT, ideal vs realistic standards, cal-plane offset)
- *   2. Port Extension (electrical delay)
- *   3. Embedding / De-embedding (T-matrix cascade)
- *   4. Time Domain / TDR / Gating
+ * A collapsible panel with tabs for teaching VNA concepts:
+ *   Pipeline order: Calibration → De-embedding → Port Extension → Gating → Uncertainty
  */
 import { useState, useRef, useEffect, useMemo } from "react";
 import { useTranslation } from "react-i18next";
@@ -27,6 +24,7 @@ import ToggleButton from "@mui/material/ToggleButton";
 import ToggleButtonGroup from "@mui/material/ToggleButtonGroup";
 import FormControlLabel from "@mui/material/FormControlLabel";
 import Switch from "@mui/material/Switch";
+import Checkbox from "@mui/material/Checkbox";
 import Slider from "@mui/material/Slider";
 import Collapse from "@mui/material/Collapse";
 import Alert from "@mui/material/Alert";
@@ -40,6 +38,7 @@ import "uplot/dist/uPlot.min.css";
 import { parseInput, parseSIInput, speedOfLight, unitConverter } from "./commonFunctions.js";
 import { frequencyToTimeDomain, applyGate, gateStartStopToCS, gateCsToStartStop, windowInfo, computeTdrResolution } from "./tdr.js";
 import { extensionDelay } from "./portExtension.js";
+import { VNA_STAGES } from "./vnaStages.js";
 
 // ---------------------------------------------------------------------------
 // Small helpers
@@ -794,6 +793,11 @@ function UncertaintyTab({ uncertaintySettings, setUncertaintySettings }) {
 }
 
 // ---------------------------------------------------------------------------
+// Pipeline stage colour definitions — imported from shared module
+// ---------------------------------------------------------------------------
+const STAGE_DEFS = VNA_STAGES;
+
+// ---------------------------------------------------------------------------
 // Main VnaTools component
 // ---------------------------------------------------------------------------
 export default function VnaTools({
@@ -812,6 +816,10 @@ export default function VnaTools({
   circuitLength,
   zo,
   centerFrequency,
+  splitSmithChart,
+  setSplitSmithChart,
+  visibleStages,
+  setVisibleStages,
 }) {
   const { t } = useTranslation();
   const [tab, setTab] = useState(0);
@@ -822,6 +830,16 @@ export default function VnaTools({
     Boolean,
   ).length;
 
+  // Which stages have data + are enabled (for visibility checkboxes)
+  const relevantStageKeys = STAGE_DEFS.filter(({ key }) => {
+    if (key === "raw") return activeCount > 0;
+    if (key === "afterCal") return calSettings.enabled;
+    if (key === "afterDeembed") return deembedSettings.enabled;
+    if (key === "afterPe") return peSettings.enabled;
+    if (key === "afterGating") return tdrSettings.enabled && tdrSettings.gateEnabled;
+    return false;
+  });
+
   return (
     <Accordion expanded={expanded} onChange={(_, isExp) => setExpanded(isExp)} sx={{ mt: 0 }}>
       <AccordionSummary expandIcon={<ExpandMoreIcon />}>
@@ -829,6 +847,54 @@ export default function VnaTools({
         {activeCount > 0 && <Chip label={t("vna.activeCount", { n: activeCount })} size="small" color="primary" />}
       </AccordionSummary>
       <AccordionDetails sx={{ pt: 0 }}>
+        {/* ── Pipeline display controls ── */}
+        <Box sx={{ mb: 2, p: 1, border: "1px solid #e0e0e0", borderRadius: 1 }}>
+          <Typography variant="subtitle2" sx={{ mb: 1 }}>
+            {t("vna.pipeline.orderNote")}
+          </Typography>
+          <Row>
+            <LabelCell>{t("vna.pipeline.splitChart")}</LabelCell>
+            <FieldCell>
+              <FormControlLabel
+                control={<Switch checked={splitSmithChart} onChange={(e) => setSplitSmithChart(e.target.checked)} />}
+                label={
+                  <Typography variant="body2" color="text.secondary">
+                    {t("vna.pipeline.splitChartDesc")}
+                  </Typography>
+                }
+              />
+            </FieldCell>
+          </Row>
+
+          {splitSmithChart && activeCount > 0 && relevantStageKeys.length > 0 && (
+            <Box sx={{ mt: 1 }}>
+              <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 0.5 }}>
+                {t("vna.pipeline.visibleStages")}
+              </Typography>
+              <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0 }}>
+                {relevantStageKeys.map(({ key, labelKey, color }) => (
+                  <FormControlLabel
+                    key={key}
+                    control={
+                      <Checkbox
+                        size="small"
+                        checked={visibleStages[key]}
+                        onChange={(e) => setVisibleStages((s) => ({ ...s, [key]: e.target.checked }))}
+                        sx={{ color, "&.Mui-checked": { color } }}
+                      />
+                    }
+                    label={
+                      <Typography variant="caption" sx={{ color }}>
+                        {t(labelKey)}
+                      </Typography>
+                    }
+                  />
+                ))}
+              </Box>
+            </Box>
+          )}
+        </Box>
+
         <Tabs
           value={tab}
           onChange={(_, v) => setTab(v)}
@@ -837,15 +903,15 @@ export default function VnaTools({
           sx={{ mb: 2, borderBottom: 1, borderColor: "divider" }}
         >
           <Tab label={t("vna.tabs.calibration")} />
-          <Tab label={t("vna.tabs.portExtension")} />
           <Tab label={t("vna.tabs.deembedding")} />
+          <Tab label={t("vna.tabs.portExtension")} />
           <Tab label={t("vna.tabs.tdr")} />
           <Tab label={t("vna.tabs.uncertainty")} />
         </Tabs>
 
         {tab === 0 && <CalibrationTab calSettings={calSettings} setCalSettings={setCalSettings} circuitLength={circuitLength} />}
-        {tab === 1 && <PortExtensionTab peSettings={peSettings} setPeSettings={setPeSettings} centerFrequency={centerFrequency} />}
-        {tab === 2 && <DeembedTab deembedSettings={deembedSettings} setDeembedSettings={setDeembedSettings} />}
+        {tab === 1 && <DeembedTab deembedSettings={deembedSettings} setDeembedSettings={setDeembedSettings} />}
+        {tab === 2 && <PortExtensionTab peSettings={peSettings} setPeSettings={setPeSettings} centerFrequency={centerFrequency} />}
         {tab === 3 && (
           <TdrTab tdrSettings={tdrSettings} setTdrSettings={setTdrSettings} sparamData={sparamData} isSynthesized={isSynthesized} zo={zo} />
         )}
