@@ -1,6 +1,10 @@
 name: Deploy to GitHub Pages
 
-on: workflow_dispatch
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
   build-and-deploy:
@@ -9,11 +13,14 @@ jobs:
     steps:
       - name: Checkout source
         uses: actions/checkout@v4
+        with:
+          ref: add-vna-teaching-functionality
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 23
+          node-version: 22
+          cache: npm
 
       - name: Install dependencies
         run: npm ci
@@ -21,10 +28,11 @@ jobs:
       - name: Build
         run: |
           npm run build
-          cp sitemap.xml dist/
-        
+          if [ -f sitemap.xml ]; then cp sitemap.xml dist/; fi
+
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./dist # <-- change if your build folder is named differently
+          publish_dir: ./dist
+          publish_branch: gh-pages
