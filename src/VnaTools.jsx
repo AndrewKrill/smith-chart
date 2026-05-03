@@ -93,10 +93,17 @@ function LengthInput({ label, value, unit, onChange, onUnitChange }) {
 const CAL_TYPES = ["OSL", "OS", "OL", "SL", "O", "S", "L"];
 
 // Controlled input that stores a string locally and commits as SI base units on blur/Enter
+function formatDisplayValue(siValue, multiplier) {
+  if (siValue == null) return "0";
+  const display = siValue / multiplier;
+  if (display === 0) return "0";
+  return String(parseFloat(display.toPrecision(6)));
+}
+
 function SITextField({ label, siValue, multiplier, unit, onCommit, ...props }) {
-  const [localStr, setLocalStr] = useState(siValue != null ? String((siValue / multiplier).toPrecision(6).replace(/\.?0+$/, "")) : "0");
+  const [localStr, setLocalStr] = useState(formatDisplayValue(siValue, multiplier));
   useEffect(() => {
-    setLocalStr(siValue != null ? String((siValue / multiplier).toPrecision(6).replace(/\.?0+$/, "")) : "0");
+    setLocalStr(formatDisplayValue(siValue, multiplier));
   }, [siValue, multiplier]);
   function commit() {
     const parsed = parseFloat(parseInput(localStr));
