@@ -25,13 +25,21 @@ import ToggleButton from "@mui/material/ToggleButton";
 import ToggleButtonGroup from "@mui/material/ToggleButtonGroup";
 
 import { syncObjectToUrl, updateObjectFromUrl } from "./urlFunctions.js"; // Import the syncObjectToUrl function
-import { theme, convertSettingsToFloat, unitConverter } from "./commonFunctions.js";
+import { theme, convertSettingsToFloat, unitConverter, polarToRectangular, rectangularToPolar } from "./commonFunctions.js";
 import { circuitComponents } from "./circuitComponents.js";
 
 import { allImpedanceCalculations, synthesizeS11FromCircuit } from "./impedanceFunctions.js";
 // import { sParamFrequencyRange } from "./sparam.js"; // Import the sParamFrequencyRange function
 
-import { applyCalibrationToDataset } from "./calibration.js";
+import {
+  applyCalibrationToDataset,
+  computeErrorTerms,
+  applyCalibration,
+  idealStandards,
+  realisticOpenGamma,
+  realisticShortGamma,
+  realisticLoadGamma,
+} from "./calibration.js";
 import { applyPortExtension } from "./portExtension.js";
 import { applyDeembedding } from "./deembedding.js";
 import { frequencyToTimeDomain, applyGate, computeTdrResolution } from "./tdr.js";
@@ -244,38 +252,68 @@ function App() {
   // Calibration-plane re-referencing for synthesized data
   // ---------------------------------------------------------------------------
 
-  // S11 of the circuit as seen FROM the calibration plane (userCircuit[planeDP] onwards).
-  // When calibration is enabled with a planeDP, this moves that point to the Smith chart centre.
+  // Apply real SOLT 3-term calibration to the synthesized circuit S11.
+  // The "fixture" is the set of components *outside* the calibration plane
+  // (i.e., between the cal plane and the VNA port).  We simulate what the VNA
+  // would measure for each standard by passing the standard through the fixture,
+  // then compute the SOLT error terms and apply the correction to the raw S11.
   const calCorrectedSynData = useMemo(() => {
     if (!calSettings.enabled || calSettings.planeDP === null || calSettings.planeDP === undefined) return null;
-    const fromPlane = userCircuit.slice(calSettings.planeDP);
-    if (fromPlane.length === 0) return null;
-    // Skip re-referencing if the slice still contains an S-param file component;
-    // synthesizeS11FromCircuit cannot handle file-based components.
-    if (fromPlane.findIndex((c) => c.name === "sparam") !== -1) return null;
+    if (!synthesizedSParamData) return null;
+    // Skip if any component in the circuit is a file-based S-param block.
+    if (userCircuit.findIndex((c) => c.name === "sparam") !== -1) return null;
 
     const sf = convertSettingsToFloat(JSON.parse(JSON.stringify(settings)));
-    const centerF = sf.frequency * unitConverter[settings.frequencyUnit];
-    const fSpanHz = sf.fSpan * unitConverter[settings.fSpanUnit];
-    const nPoints = tdrSettings.synthPoints || 201;
+    const zo = sf.zo;
 
-    let fMin, fMax;
-    if (tdrSettings.synthFmin !== null && tdrSettings.synthFmax !== null) {
-      fMin = tdrSettings.synthFmin;
-      fMax = tdrSettings.synthFmax;
-    } else if (fSpanHz > 0) {
-      fMin = Math.max(centerF - fSpanHz, 1); // 1 Hz minimum: avoids log-scale/near-DC issues
-      fMax = centerF + fSpanHz;
-    } else {
-      fMin = centerF * 0.5;
-      fMax = centerF * 1.5;
+    // Components between the cal plane and the VNA port (the "fixture").
+    // planeDP=0 means the cal plane is AT the source node, so there is no fixture.
+    const fixtureComps = userCircuit.slice(calSettings.planeDP + 1);
+
+    // Frequency list taken from the already-synthesized raw data.
+    const frequencies = Object.keys(synthesizedSParamData).map(Number);
+
+    // Synthesize what the VNA would *measure* for each standard by running the
+    // standard through the fixture.  Very-large/small R values approximate the
+    // ideal Γ = +1 / −1 without requiring special-case math.
+    const openZ = { real: 1e15, imaginary: 0 };  // Γ ≈ +1
+    const shortZ = { real: 1e-9, imaginary: 0 };  // Γ ≈ −1
+    const loadZ  = { real: zo,   imaginary: 0 };  // Γ = 0
+
+    const measuredOpen  = synthesizeS11FromCircuit([openZ,  ...fixtureComps], frequencies, zo) ?? {};
+    const measuredShort = synthesizeS11FromCircuit([shortZ, ...fixtureComps], frequencies, zo) ?? {};
+    const measuredLoad  = synthesizeS11FromCircuit([loadZ,  ...fixtureComps], frequencies, zo) ?? {};
+
+    const result = {};
+    for (const fStr of Object.keys(synthesizedSParamData)) {
+      const f = Number(fStr);
+
+      // Actual (ideal) standard reflection coefficients at this frequency.
+      let openActual, shortActual, loadActual;
+      if (calSettings.useIdeal) {
+        openActual  = idealStandards.open;
+        shortActual = idealStandards.short;
+        loadActual  = idealStandards.load;
+      } else {
+        openActual  = realisticOpenGamma(f, zo, calSettings.standards?.openParams  || {});
+        shortActual = realisticShortGamma(f, zo, calSettings.standards?.shortParams || {});
+        loadActual  = realisticLoadGamma(f, zo, calSettings.standards?.loadParams  || {});
+      }
+
+      const standards = {
+        open:  { measured: polarToRectangular(measuredOpen[fStr]?.S11  ?? { magnitude: 1, angle: 0   }), actual: openActual  },
+        short: { measured: polarToRectangular(measuredShort[fStr]?.S11 ?? { magnitude: 1, angle: 180 }), actual: shortActual },
+        load:  { measured: polarToRectangular(measuredLoad[fStr]?.S11  ?? { magnitude: 0, angle: 0   }), actual: loadActual  },
+      };
+
+      const errorTerms = computeErrorTerms(standards, calSettings.calType || "OSL");
+
+      const rawS11Rect = polarToRectangular(synthesizedSParamData[fStr].S11);
+      const corrected  = applyCalibration(rawS11Rect, errorTerms);
+      result[fStr] = { S11: rectangularToPolar(corrected) };
     }
-    const frequencies = [];
-    for (let i = 0; i < nPoints; i++) {
-      frequencies.push(fMin + (i * (fMax - fMin)) / (nPoints - 1));
-    }
-    return synthesizeS11FromCircuit(fromPlane, frequencies, sf.zo);
-  }, [calSettings.enabled, calSettings.planeDP, userCircuit, settings, tdrSettings.synthPoints, tdrSettings.synthFmin, tdrSettings.synthFmax]);
+    return result;
+  }, [calSettings.enabled, calSettings.planeDP, calSettings.calType, calSettings.useIdeal, calSettings.standards, userCircuit, synthesizedSParamData, settings]);
 
   // Base synthesized data (before PE): use the cal-corrected view when calibration
   // plane is active, otherwise use the full circuit synthesis.
@@ -371,7 +409,7 @@ function App() {
     raw: rawSParamData ?? synthesizedSParamData,
     afterCal: activeStages.cal ? (afterCalData ?? calCorrectedSynData) : null,
     afterDeembed: activeStages.deembed ? afterDeembedData : null,
-    afterPe: activeStages.pe ? (afterPeData ?? peAppliedSynData) : null,
+    afterPe: activeStages.pe ? (afterPeData ?? effectiveSynData) : null,
     afterGating: activeStages.gating ? gatedSParamData : null,
   };
 

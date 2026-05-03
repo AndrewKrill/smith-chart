@@ -799,7 +799,32 @@ function Graph({
     if (coord.length > 0) {
       createLabel(svg, coord[0][0], Number(coord[0][1]) - 12, "Pre-ext");
     }
-  }, [peEnabled, peLength_m, peEeff, sParameters, prePeSynData, zo, width]);
+
+    // For the synthesized case, also draw the post-PE trace so the user can see
+    // the phase-rotated result.  effectiveSpData already holds the PE-applied
+    // synthesized data (effectiveSynData), so we draw it here only when the
+    // two datasets are different (i.e., a non-zero length is set).
+    if (!sParameters && prePeSynData && effectiveSpData && effectiveSpData !== prePeSynData) {
+      const postCoord = [];
+      for (const fStr in effectiveSpData) {
+        const rect = polarToRectangular(effectiveSpData[fStr].S11);
+        const z = reflToZ(rect, refZo);
+        postCoord.push(impedanceToSmithChart(z.real / zo, z.imaginary / zo, width));
+      }
+      if (postCoord.length >= 2) {
+        const postPath = `M ${postCoord[0][0]} ${postCoord[0][1]} ` + postCoord.map((c) => `L ${c[0]} ${c[1]}`).join(" ");
+        svg
+          .append("path")
+          .attr("stroke-linecap", "round")
+          .attr("stroke-linejoin", "round")
+          .attr("fill", "none")
+          .attr("stroke", "rgba(0,114,178,0.85)")
+          .attr("stroke-width", 1.5)
+          .attr("d", postPath);
+        createLabel(svg, postCoord[0][0], Number(postCoord[0][1]) - 12, "Post-ext");
+      }
+    }
+  }, [peEnabled, peLength_m, peEeff, sParameters, prePeSynData, effectiveSpData, zo, width]);
 
   // ---------------------------------------------------------------------------
   // VNA overlay: Uncertainty ellipses around each S11 frequency point
