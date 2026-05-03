@@ -422,7 +422,46 @@ function RPlot({ RefIn, options, freqUnit, title }) {
   );
 }
 
-export default function Results({ zProc, spanResults, freqUnit, plotType, sParameters, gainResults, noiseArray, RefIn, zo }) {
+/**
+ * UncertaintyPlot: renders ±uncertainty bands as shaded areas on an S11 magnitude plot.
+ * Uses a canvas overlay approach through uPlot's hooks.
+ */
+function UncertaintyPlot({ uncertaintyBands, options, freqUnit }) {
+  const { t } = useTranslation();
+  if (!uncertaintyBands || !uncertaintyBands.freqs || uncertaintyBands.freqs.length === 0) return null;
+
+  const { freqs, s11_mag_dB, upper_dB, lower_dB, maxUncertainty_dB, maxUncertainty_f, dominantSource } = uncertaintyBands;
+  const fAxis = freqs.map((f) => f / unitConverter[freqUnit]);
+
+  const opt = JSON.parse(JSON.stringify(options));
+  // Nominal S11 series
+  opt.series.push({ label: "|S11| (dB)", stroke: "blue", width: 2, scale: "y" });
+  // Upper bound
+  opt.series.push({ label: "+unc (dB)", stroke: "rgba(255,80,0,0.7)", width: 1, scale: "y", dash: [4, 3] });
+  // Lower bound
+  opt.series.push({ label: "−unc (dB)", stroke: "rgba(255,80,0,0.7)", width: 1, scale: "y", fill: "rgba(255,80,0,0.15)", dash: [4, 3] });
+
+  const data = [fAxis, s11_mag_dB, upper_dB, lower_dB];
+
+  return (
+    <Box sx={{ mt: 2 }}>
+      <Typography variant="subtitle2" sx={{ mb: 0.5 }}>
+        {t("vna.unc.plotTitle")}
+      </Typography>
+      <UplotReact options={opt} data={data} />
+      <Typography variant="caption" color="text.secondary">
+        {t("vna.unc.maxUnc", {
+          v: maxUncertainty_dB.toFixed(2),
+          f: (maxUncertainty_f / unitConverter[freqUnit]).toPrecision(4),
+          unit: freqUnit,
+          src: dominantSource,
+        })}
+      </Typography>
+    </Box>
+  );
+}
+
+export default function Results({ zProc, spanResults, freqUnit, plotType, sParameters, gainResults, noiseArray, RefIn, zo, uncertaintyBands }) {
   const { t, i18n } = useTranslation();
   const { zStr, zPolarStr, refStr, refPolarStr, vswr, qFactor } = zProc;
   const containerRef = useRef();
@@ -539,6 +578,7 @@ export default function Results({ zProc, spanResults, freqUnit, plotType, sParam
     return (
       <div ref={containerRef} style={{ width: "100%", marginTop: "30px" }}>
         <SPlot sparametersData={sparametersData} options={options4} freqUnit={freqUnit} title={t("results.rawData")} />
+        <UncertaintyPlot uncertaintyBands={uncertaintyBands} options={optionsS11} freqUnit={freqUnit} />
       </div>
     );
 
@@ -547,6 +587,7 @@ export default function Results({ zProc, spanResults, freqUnit, plotType, sParam
     return (
       <div ref={containerRef} style={{ width: "100%", marginTop: "30px" }}>
         <RPlot RefIn={RefIn} options={optionsS11} freqUnit={freqUnit} title={t("results.zDp1")} />
+        <UncertaintyPlot uncertaintyBands={uncertaintyBands} options={optionsS11} freqUnit={freqUnit} />
         <GainPlot gain={gainResults} options={optionsGain} freqUnit={freqUnit} title={t("results.systemGain")} legend={t("results.gainLegend")} />
         <GainPlot gain={noiseArray} options={optionsGain} freqUnit={freqUnit} title={t("results.noiseFigure")} legend={t("results.nfLegend")} />
       </div>
@@ -577,6 +618,7 @@ export default function Results({ zProc, spanResults, freqUnit, plotType, sParam
         <div ref={containerRef} style={{ width: "100%", marginTop: "30px" }}>
           <SpanTolerancePlot spanResultsByTol={spanResults} options={optionsZTol} freqUnit={freqUnit} zo={zo} plotKind="z" />
           <SpanTolerancePlot spanResultsByTol={spanResults} options={optionsS11Tol} freqUnit={freqUnit} zo={zo} plotKind="s11" />
+          <UncertaintyPlot uncertaintyBands={uncertaintyBands} options={optionsS11} freqUnit={freqUnit} />
           <Typography sx={{ textAlign: "center", mt: 2 }}>
             {t("results.assuming")}{" "}
             <i>

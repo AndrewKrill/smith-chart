@@ -37,7 +37,7 @@ import Chip from "@mui/material/Chip";
 import UplotReact from "uplot-react";
 import "uplot/dist/uPlot.min.css";
 
-import { parseInput, frequencyUnits, unitConverter, speedOfLight, lengthUnits } from "./commonFunctions.js";
+import { parseInput, speedOfLight, unitConverter } from "./commonFunctions.js";
 import { frequencyToTimeDomain, applyGate, gateStartStopToCS, gateCsToStartStop, windowInfo, computeTdrResolution } from "./tdr.js";
 import { extensionDelay } from "./portExtension.js";
 

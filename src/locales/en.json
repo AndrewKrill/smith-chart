@@ -252,5 +252,87 @@
   },
   "errors": {
     "sparamUrlTooLong": "The saved state included a 1000+ character s-parameter file. That was not saved so must be manually re-entered"
+  },
+  "vna": {
+    "title": "VNA Teaching Tools",
+    "activeCount": "{{n}} active",
+    "cal": {
+      "on": "On",
+      "off": "Off",
+      "enabled": "Calibration enabled",
+      "calType": "Cal type",
+      "standardType": "Standard model",
+      "ideal": "Ideal",
+      "realistic": "Realistic",
+      "realisticDesc": "Enter residual model parameters for each standard (frequency-independent polynomial coefficients)",
+      "openStd": "Open standard",
+      "shortStd": "Short standard",
+      "loadStd": "Load standard",
+      "fringe_c0": "Fringe capacitance C0",
+      "residual_l0": "Residual inductance L0",
+      "r_offset": "Residual resistance",
+      "planeSectionTitle": "Calibration Plane Offset",
+      "planeLength": "Offset length",
+      "planeHint": "The calibration plane marker (red dashed line) on the Smith chart and TDR plot will update as you change the offset length."
+    },
+    "tabs": {
+      "calibration": "Calibration",
+      "portExtension": "Port Extension",
+      "deembedding": "Embed / De-embed",
+      "tdr": "TDR / Gating",
+      "uncertainty": "Uncertainty"
+    },
+    "pe": {
+      "enabled": "Port extension enabled",
+      "length": "Extension length",
+      "delayInfo": "Two-way electrical delay: {{delay}} ns",
+      "desc": "Port extension shifts the reference plane by adding an electrical delay. The original (pre-extension) trace is shown as a dashed overlay on the Smith chart.",
+      "clear": "Clear extension"
+    },
+    "de": {
+      "enabled": "De-embedding enabled",
+      "mode": "Mode",
+      "deembed": "De-embed",
+      "embed": "Embed",
+      "fixtureSource": "Fixture model",
+      "tline": "Ideal T-line",
+      "sparam": "S-param file",
+      "fixtureLength": "Fixture length",
+      "deembedDesc": "De-embedding removes the fixture S-parameters from the measured data using T-matrix cascade.",
+      "embedDesc": "Embedding adds the fixture S-parameters to the DUT data.",
+      "sparamHint": "Upload a .s2p Touchstone file as the fixture model. Asymmetric fixtures: use separate files for port 1 and port 2."
+    },
+    "tdr": {
+      "enabled": "TDR enabled",
+      "mode": "Transform mode",
+      "bandpass": "Bandpass",
+      "lpImpulse": "LP Impulse",
+      "lpStep": "LP Step",
+      "window": "Window",
+      "resolutionInfo": "Resolution: {{res_ns}} ns ({{res_mm}} mm) | Max time span: {{span_ns}} ns",
+      "noData": "No S-parameter data loaded. Add an S-parameter component to see the time-domain transform.",
+      "plotTitle": "Time-Domain Response",
+      "gateApplied": "Gate applied — gated trace (green dashed) is shown on the Smith chart alongside the original.",
+      "gateTitle": "Gating",
+      "gateEnabled": "Gate enabled",
+      "gateStart": "Start",
+      "gateStop": "Stop",
+      "gateCenter": "Center",
+      "gateSpan": "Span",
+      "gateShape": "Gate shape",
+      "gate_minimum": "Minimum",
+      "gate_nominal": "Nominal",
+      "gate_wide": "Wide",
+      "gate_maximum": "Maximum",
+      "gateHint": "Editing any of Start / Stop / Center / Span automatically updates the others. The gate region is shaded on the time-domain plot."
+    },
+    "unc": {
+      "enabled": "Uncertainty enabled",
+      "noiseFloor": "Noise floor",
+      "repeatability": "Cable/connector repeatability",
+      "desc": "Uncertainty bands (shaded) are shown on all S11 magnitude plots and as ellipses around frequency points on the Smith chart. Dominant error source and worst-case uncertainty are summarised below each plot.",
+      "plotTitle": "S11 with ±Uncertainty Bands",
+      "maxUnc": "Max uncertainty: ±{{v}} dB at {{f}} {{unit}} (dominant: {{src}})"
+    }
   }
 }

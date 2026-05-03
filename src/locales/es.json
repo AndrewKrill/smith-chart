@@ -252,5 +252,87 @@
   },
   "errors": {
     "sparamUrlTooLong": "El estado guardado incluía un archivo de parámetros S de más de 1000 caracteres. No se guardó y debe introducirse de nuevo manualmente"
+  },
+  "vna": {
+    "title": "Herramientas de enseñanza VNA",
+    "activeCount": "{{n}} activas",
+    "cal": {
+      "on": "Activado",
+      "off": "Desactivado",
+      "enabled": "Calibración habilitada",
+      "calType": "Tipo de cal.",
+      "standardType": "Modelo de estándar",
+      "ideal": "Ideal",
+      "realistic": "Realista",
+      "realisticDesc": "Introduzca los parámetros del modelo residual para cada estándar",
+      "openStd": "Estándar Abierto",
+      "shortStd": "Estándar Cortocircuito",
+      "loadStd": "Estándar Carga",
+      "fringe_c0": "Capacitancia de borde C0",
+      "residual_l0": "Inductancia residual L0",
+      "r_offset": "Resistencia residual",
+      "planeSectionTitle": "Desplazamiento del plano de calibración",
+      "planeLength": "Longitud de desplazamiento",
+      "planeHint": "El marcador del plano de calibración (línea roja discontinua) se actualiza en la carta de Smith y en el gráfico TDR."
+    },
+    "tabs": {
+      "calibration": "Calibración",
+      "portExtension": "Extensión de puerto",
+      "deembedding": "Embed / De-embed",
+      "tdr": "TDR / Puerta",
+      "uncertainty": "Incertidumbre"
+    },
+    "pe": {
+      "enabled": "Extensión de puerto habilitada",
+      "length": "Longitud de extensión",
+      "delayInfo": "Retardo eléctrico de ida y vuelta: {{delay}} ns",
+      "desc": "La extensión de puerto desplaza el plano de referencia añadiendo retardo eléctrico.",
+      "clear": "Eliminar extensión"
+    },
+    "de": {
+      "enabled": "De-embedding habilitado",
+      "mode": "Modo",
+      "deembed": "De-embed",
+      "embed": "Embed",
+      "fixtureSource": "Modelo de fixture",
+      "tline": "Línea T ideal",
+      "sparam": "Archivo S-param",
+      "fixtureLength": "Longitud del fixture",
+      "deembedDesc": "El de-embedding elimina los parámetros S del fixture de los datos medidos.",
+      "embedDesc": "El embedding añade los parámetros S del fixture al DUT.",
+      "sparamHint": "Cargue un archivo Touchstone .s2p como modelo de fixture. Para fixtures asimétricos use archivos distintos por puerto."
+    },
+    "tdr": {
+      "enabled": "TDR habilitado",
+      "mode": "Modo de transformada",
+      "bandpass": "Paso de banda",
+      "lpImpulse": "LP Impulso",
+      "lpStep": "LP Escalón",
+      "window": "Ventana",
+      "resolutionInfo": "Resolución: {{res_ns}} ns ({{res_mm}} mm) | Tiempo máx.: {{span_ns}} ns",
+      "noData": "No hay datos S-param cargados.",
+      "plotTitle": "Respuesta en tiempo",
+      "gateApplied": "Puerta aplicada — la traza con puerta (verde discontinua) se muestra junto a la original en la carta de Smith.",
+      "gateTitle": "Puerta temporal",
+      "gateEnabled": "Puerta habilitada",
+      "gateStart": "Inicio",
+      "gateStop": "Fin",
+      "gateCenter": "Centro",
+      "gateSpan": "Amplitud",
+      "gateShape": "Forma de puerta",
+      "gate_minimum": "Mínima",
+      "gate_nominal": "Nominal",
+      "gate_wide": "Ancha",
+      "gate_maximum": "Máxima",
+      "gateHint": "Editar Inicio / Fin / Centro / Amplitud actualiza automáticamente los demás valores."
+    },
+    "unc": {
+      "enabled": "Incertidumbre habilitada",
+      "noiseFloor": "Piso de ruido",
+      "repeatability": "Repetibilidad cable/conector",
+      "desc": "Las bandas de incertidumbre se muestran en los gráficos de |S11| y como elipses en la carta de Smith.",
+      "plotTitle": "S11 con bandas de ±incertidumbre",
+      "maxUnc": "Incertidumbre máx.: ±{{v}} dB a {{f}} {{unit}} (dominante: {{src}})"
+    }
   }
 }

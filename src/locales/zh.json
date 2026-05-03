@@ -228,7 +228,11 @@
     "version": "版本",
     "date": "日期",
     "notes": "说明",
-    "v21": ["新增 S 参数元件", "新增用于 s2p 增益的增益圆", "新增若干 S 参数教程"],
+    "v21": [
+      "新增 S 参数元件",
+      "新增用于 s2p 增益的增益圆",
+      "新增若干 S 参数教程"
+    ],
     "v20a": "网站从 will-kelsey.com/smith_chart/ 迁移至 onlinesmithchart.com",
     "v20b": "整站重写。六年间旧站功能不断叠加，代码已很混乱。有用户通过查看代码验证实现，这很困难。如今代码更有条理且已优化。希望未来社区能为代码库贡献功能与改进。",
     "v20c": "从原生 JS 迁移至 React + MUI。由此可运行 lint、更易维护、文件更小，并获得许多细微好处。",
@@ -252,5 +256,87 @@
   },
   "errors": {
     "sparamUrlTooLong": "保存的状态包含超过 1000 个字符的 S 参数文件。该内容未保存，需手动重新输入"
+  },
+  "vna": {
+    "title": "VNA 教学工具",
+    "activeCount": "{{n}} 项激活",
+    "cal": {
+      "on": "开启",
+      "off": "关闭",
+      "enabled": "校准已启用",
+      "calType": "校准类型",
+      "standardType": "标准件模型",
+      "ideal": "理想",
+      "realistic": "实际",
+      "realisticDesc": "输入每个标准件的残差模型参数",
+      "openStd": "开路标准",
+      "shortStd": "短路标准",
+      "loadStd": "负载标准",
+      "fringe_c0": "边缘电容 C0",
+      "residual_l0": "残余电感 L0",
+      "r_offset": "残余电阻",
+      "planeSectionTitle": "校准面偏移",
+      "planeLength": "偏移长度",
+      "planeHint": "校准面标记（红色虚线）将在史密斯圆图和 TDR 图上更新。"
+    },
+    "tabs": {
+      "calibration": "校准",
+      "portExtension": "端口延伸",
+      "deembedding": "嵌入 / 去嵌入",
+      "tdr": "TDR / 门控",
+      "uncertainty": "不确定度"
+    },
+    "pe": {
+      "enabled": "端口延伸已启用",
+      "length": "延伸长度",
+      "delayInfo": "双向电延迟：{{delay}} ns",
+      "desc": "端口延伸通过添加电延迟来移动参考面。",
+      "clear": "清除延伸"
+    },
+    "de": {
+      "enabled": "去嵌入已启用",
+      "mode": "模式",
+      "deembed": "去嵌入",
+      "embed": "嵌入",
+      "fixtureSource": "夹具模型",
+      "tline": "理想传输线",
+      "sparam": "S 参数文件",
+      "fixtureLength": "夹具长度",
+      "deembedDesc": "去嵌入从测量数据中移除夹具 S 参数。",
+      "embedDesc": "嵌入将夹具 S 参数添加到 DUT 中。",
+      "sparamHint": "上传 .s2p 文件作为夹具模型，非对称夹具请每端口使用单独文件。"
+    },
+    "tdr": {
+      "enabled": "TDR 已启用",
+      "mode": "变换模式",
+      "bandpass": "带通",
+      "lpImpulse": "低通冲激",
+      "lpStep": "低通阶跃",
+      "window": "窗函数",
+      "resolutionInfo": "分辨率：{{res_ns}} ns（{{res_mm}} mm）| 最大时间跨度：{{span_ns}} ns",
+      "noData": "未加载 S 参数数据。",
+      "plotTitle": "时域响应",
+      "gateApplied": "门控已应用——门控迹线（绿色虚线）与原始迹线一同显示在史密斯圆图上。",
+      "gateTitle": "时域门控",
+      "gateEnabled": "门控已启用",
+      "gateStart": "起点",
+      "gateStop": "终点",
+      "gateCenter": "中心",
+      "gateSpan": "跨度",
+      "gateShape": "门形",
+      "gate_minimum": "最小",
+      "gate_nominal": "标准",
+      "gate_wide": "宽",
+      "gate_maximum": "最大",
+      "gateHint": "编辑任一字段将自动更新其余字段。"
+    },
+    "unc": {
+      "enabled": "不确定度已启用",
+      "noiseFloor": "噪底",
+      "repeatability": "电缆/连接器重复性",
+      "desc": "不确定度频带显示在所有 S11 幅度图上，并以椭圆形式显示在史密斯圆图上。",
+      "plotTitle": "S11 ±不确定度频带",
+      "maxUnc": "最大不确定度：±{{v}} dB（{{f}} {{unit}}，主导来源：{{src}})"
+    }
   }
 }

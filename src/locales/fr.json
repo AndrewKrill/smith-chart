@@ -228,7 +228,11 @@
     "version": "Version",
     "date": "Date",
     "notes": "Notes",
-    "v21": ["Ajout du composant paramètres S", "Ajout des cercles de gain pour le gain s2p", "Ajout de tutoriels sur les paramètres S"],
+    "v21": [
+      "Ajout du composant paramètres S",
+      "Ajout des cercles de gain pour le gain s2p",
+      "Ajout de tutoriels sur les paramètres S"
+    ],
     "v20a": "Site déplacé de will-kelsey.com/smith_chart/ vers onlinesmithchart.com",
     "v20b": "Refonte complète du site. En plus de six ans, de nombreuses fonctions avaient rendu l’ancien code difficile à maintenir. Certains utilisateurs consultaient le code pour vérifier les implémentations, ce qui était pénible. Le code est désormais mieux structuré et optimisé. J’espère que la communauté pourra ajouter des fonctions et des améliorations.",
     "v20c": "Passage du JavaScript vanilla à React + MUI : lint, code plus maintenable, fichiers plus légers, et autres avantages du courant dominant",
@@ -252,5 +256,87 @@
   },
   "errors": {
     "sparamUrlTooLong": "L’état enregistré contenait un fichier de paramètres S de plus de 1000 caractères. Il n’a pas été sauvegardé et doit être saisi à nouveau manuellement"
+  },
+  "vna": {
+    "title": "Outils pédagogiques VNA",
+    "activeCount": "{{n}} actifs",
+    "cal": {
+      "on": "Actif",
+      "off": "Inactif",
+      "enabled": "Calibrage activé",
+      "calType": "Type de cal.",
+      "standardType": "Modèle de standard",
+      "ideal": "Idéal",
+      "realistic": "Réaliste",
+      "realisticDesc": "Paramètres du modèle résiduel pour chaque standard",
+      "openStd": "Circuit ouvert",
+      "shortStd": "Court-circuit",
+      "loadStd": "Charge",
+      "fringe_c0": "Capacité de bord C0",
+      "residual_l0": "Inductance résiduelle L0",
+      "r_offset": "Résistance résiduelle",
+      "planeSectionTitle": "Décalage du plan de calibrage",
+      "planeLength": "Longueur de décalage",
+      "planeHint": "Le marqueur du plan de calibrage (ligne rouge tiretée) se met à jour sur l'abaque et le TDR."
+    },
+    "tabs": {
+      "calibration": "Calibrage",
+      "portExtension": "Extension de port",
+      "deembedding": "Embed / De-embed",
+      "tdr": "TDR / Fenêtrage",
+      "uncertainty": "Incertitude"
+    },
+    "pe": {
+      "enabled": "Extension de port activée",
+      "length": "Longueur",
+      "delayInfo": "Retard aller-retour : {{delay}} ns",
+      "desc": "Décale le plan de référence.",
+      "clear": "Effacer"
+    },
+    "de": {
+      "enabled": "De-embedding activé",
+      "mode": "Mode",
+      "deembed": "De-embed",
+      "embed": "Embed",
+      "fixtureSource": "Fixture",
+      "tline": "Ligne T idéale",
+      "sparam": "Fichier S-param",
+      "fixtureLength": "Longueur fixture",
+      "deembedDesc": "Supprime la fixture des données mesurées.",
+      "embedDesc": "Ajoute la fixture au DUT.",
+      "sparamHint": "Chargez un fichier .s2p. Fixtures asymétriques : fichiers séparés par port."
+    },
+    "tdr": {
+      "enabled": "TDR activé",
+      "mode": "Mode",
+      "bandpass": "Passe-bande",
+      "lpImpulse": "PB Impulsion",
+      "lpStep": "PB Échelon",
+      "window": "Fenêtre",
+      "resolutionInfo": "Résolution : {{res_ns}} ns ({{res_mm}} mm) | Durée max : {{span_ns}} ns",
+      "noData": "Aucune donnée S-param.",
+      "plotTitle": "Réponse temporelle",
+      "gateApplied": "Fenêtre appliquée.",
+      "gateTitle": "Fenêtrage",
+      "gateEnabled": "Fenêtrage activé",
+      "gateStart": "Début",
+      "gateStop": "Fin",
+      "gateCenter": "Centre",
+      "gateSpan": "Largeur",
+      "gateShape": "Forme",
+      "gate_minimum": "Minimum",
+      "gate_nominal": "Nominal",
+      "gate_wide": "Large",
+      "gate_maximum": "Maximum",
+      "gateHint": "Modifier un champ met à jour les autres."
+    },
+    "unc": {
+      "enabled": "Incertitude activée",
+      "noiseFloor": "Plancher de bruit",
+      "repeatability": "Répétabilité",
+      "desc": "Bandes d'incertitude sur les graphiques S11 et ellipses sur l'abaque.",
+      "plotTitle": "S11 ±incertitude",
+      "maxUnc": "Incertitude max : ±{{v}} dB à {{f}} {{unit}} (dominante : {{src}})"
+    }
   }
 }

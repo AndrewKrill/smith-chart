@@ -25,11 +25,18 @@ import ToggleButton from "@mui/material/ToggleButton";
 import ToggleButtonGroup from "@mui/material/ToggleButtonGroup";
 
 import { syncObjectToUrl, updateObjectFromUrl } from "./urlFunctions.js"; // Import the syncObjectToUrl function
-import { theme, convertSettingsToFloat } from "./commonFunctions.js";
+import { theme, convertSettingsToFloat, unitConverter } from "./commonFunctions.js";
 import { circuitComponents } from "./circuitComponents.js";
 
 import { allImpedanceCalculations } from "./impedanceFunctions.js";
 // import { sParamFrequencyRange } from "./sparam.js"; // Import the sParamFrequencyRange function
+
+import { applyCalibrationToDataset } from "./calibration.js";
+import { applyPortExtension } from "./portExtension.js";
+import { applyDeembedding } from "./deembedding.js";
+import { frequencyToTimeDomain, applyGate, computeTdrResolution } from "./tdr.js";
+import { computeUncertaintyBands } from "./uncertainty.js";
+import VnaTools from "./VnaTools.jsx";
 
 import debounce from "lodash/debounce";
 
@@ -48,6 +55,54 @@ const initialState = {
   gainOutCircles: [],
 };
 
+const initialCalSettings = {
+  enabled: false,
+  calType: "OSL",
+  useIdeal: true,
+  standards: {},
+  planeLength: 0,
+  planeLengthUnit: "mm",
+  planeZo: 50,
+  planeEeff: 1,
+};
+
+const initialPeSettings = {
+  enabled: false,
+  length: 0,
+  unit: "mm",
+  zo: 50,
+  eeff: 1,
+};
+
+const initialDeembedSettings = {
+  enabled: false,
+  mode: "deembed",
+  fixtureType: "tline",
+  fixtureLength: 0,
+  fixtureLengthUnit: "mm",
+  fixtureZo: 50,
+  fixtureEeff: 1,
+};
+
+const initialTdrSettings = {
+  enabled: false,
+  mode: "bandpass",
+  window: "rectangular",
+  gateEnabled: false,
+  gateStart: 0,
+  gateStop: 1e-9,
+  gateShape: "nominal",
+  velocityFactor: 1,
+};
+
+const initialUncertaintySettings = {
+  enabled: false,
+  noiseFloor_dB: -80,
+  repeatability_dB: -60,
+  useIdeal: true,
+  realisticParams: {},
+};
+
 const initialCircuit = [{ name: "blackBox", ...circuitComponents.blackBox.default }];
 
 const params = new URLSearchParams(window.location.search);
@@ -62,6 +117,13 @@ function App() {
   const [plotType, setPlotType] = useState("impedance");
   const [showIdeal, setShowIdeal] = useState(false);
 
+  // VNA tool states
+  const [calSettings, setCalSettings] = useState(initialCalSettings);
+  const [peSettings, setPeSettings] = useState(initialPeSettings);
+  const [deembedSettings, setDeembedSettings] = useState(initialDeembedSettings);
+  const [tdrSettings, setTdrSettings] = useState(initialTdrSettings);
+  const [uncertaintySettings, setUncertaintySettings] = useState(initialUncertaintySettings);
+
   const settingsFloat = convertSettingsToFloat(JSON.parse(JSON.stringify(settings)));
 
   //debounding the URL syncing because 100 updateHistory in 10s causes chrome to crash, which happens when using sliders
@@ -71,18 +133,86 @@ function App() {
     debouncedSync(settings, initialState, userCircuit, initialCircuit);
   }, [settings, userCircuit, debouncedSync]);
 
+  // Build a pipeline-corrected version of the s-param data for use throughout
+  const correctedUserCircuit = useMemo(() => {
+    const sParamIdx = userCircuit.findIndex((c) => c.name === "sparam");
+    if (sParamIdx === -1) return userCircuit;
+    if (!calSettings.enabled && !peSettings.enabled && !deembedSettings.enabled) return userCircuit;
+
+    const zo = settingsFloat.zo;
+    let data = { ...userCircuit[sParamIdx].data };
+
+    // 1. Apply calibration
+    if (calSettings.enabled) {
+      const planeLenM = parseFloat(calSettings.planeLength) * (unitConverter[calSettings.planeLengthUnit] || 1e-3);
+      data = applyCalibrationToDataset(data, { ...calSettings, planeLength: planeLenM }, zo);
+    }
+
+    // 2. Apply port extension
+    if (peSettings.enabled) {
+      const lenM = parseFloat(peSettings.length) * (unitConverter[peSettings.unit] || 1e-3);
+      data = applyPortExtension(data, lenM, parseFloat(peSettings.eeff) || 1);
+    }
+
+    // 3. Apply de-embedding (only for s2p)
+    if (deembedSettings.enabled && userCircuit[sParamIdx].type === "s2p") {
+      const fixLenM = parseFloat(deembedSettings.fixtureLength) * (unitConverter[deembedSettings.fixtureLengthUnit] || 1e-3);
+      data = applyDeembedding(data, { ...deembedSettings, fixtureLength: fixLenM });
+    }
+
+    const newCircuit = [...userCircuit];
+    newCircuit[sParamIdx] = { ...userCircuit[sParamIdx], data };
+    return newCircuit;
+  }, [userCircuit, calSettings, peSettings, deembedSettings, settingsFloat.zo]);
+
   const [processedImpedanceResults, spanResults, multiZResults, gainArray, noiseArray, numericalFrequency, RefIn, noiseFrequency] =
-    allImpedanceCalculations(userCircuit, settingsFloat, showIdeal);
+    allImpedanceCalculations(correctedUserCircuit, settingsFloat, showIdeal);
 
   //check if esr or esl exists, and if it does exist check that it is not 0 or ''
   const nonIdealUsed = userCircuit.findIndex((c) => (c.esr != null && c.esr != 0 && c.esr !== "") || (c.esl != null && c.esl != 0 && c.esl !== ""));
 
   const sParamIndex = userCircuit.findIndex((c) => c.name === "sparam");
-  const sParameters = sParamIndex === -1 ? null : userCircuit[sParamIndex];
+  const correctedSParamIndex = correctedUserCircuit.findIndex((c) => c.name === "sparam");
+  const sParameters = sParamIndex === -1 ? null : correctedUserCircuit[correctedSParamIndex];
   const s1pIndex = userCircuit.findIndex((c) => c.type === "s1p");
   const chosenSparameter =
-    sParamIndex === -1 ? null : { ...userCircuit[sParamIndex].data[numericalFrequency], zo: userCircuit[sParamIndex].settings.zo };
+    sParamIndex === -1 ? null : { ...correctedUserCircuit[correctedSParamIndex].data[numericalFrequency], zo: correctedUserCircuit[correctedSParamIndex].settings.zo };
   const chosenNoiseParameter = noiseFrequency === -1 ? null : userCircuit[sParamIndex].noise[noiseFrequency];
+
+  // TDR computation (uses corrected s-params)
+  const tdrData = useMemo(() => {
+    if (!tdrSettings.enabled || !sParameters || !sParameters.data) return null;
+    if (Object.keys(sParameters.data).length < 2) return null;
+    return frequencyToTimeDomain(sParameters.data, tdrSettings.mode, tdrSettings.window);
+  }, [tdrSettings.enabled, tdrSettings.mode, tdrSettings.window, sParameters]);
+
+  // Uncertainty bands
+  const uncertaintyBands = useMemo(() => {
+    if (!uncertaintySettings.enabled || !sParameters || !sParameters.data) return null;
+    return computeUncertaintyBands(sParameters.data, settingsFloat.zo, uncertaintySettings);
+  }, [uncertaintySettings, sParameters, settingsFloat.zo]);
+
+  // Cal-plane electrical offset in metres (used by Graph for marker)
+  const calPlaneLength_m = useMemo(() => {
+    if (!calSettings.enabled || !calSettings.planeLength) return 0;
+    return parseFloat(calSettings.planeLength) * (unitConverter[calSettings.planeLengthUnit] || 1e-3);
+  }, [calSettings]);
+
+  // Port extension length in metres (used by Graph for arc overlay)
+  const peLength_m = useMemo(() => {
+    if (!peSettings.enabled || !peSettings.length) return 0;
+    return parseFloat(peSettings.length) * (unitConverter[peSettings.unit] || 1e-3);
+  }, [peSettings]);
+
+  // Gated s-param data (for Smith chart overlay when gating is active)
+  const gatedSParamData = useMemo(() => {
+    if (!tdrSettings.enabled || !tdrSettings.gateEnabled || !tdrData) return null;
+    try {
+      return applyGate(tdrData, tdrSettings.gateStart, tdrSettings.gateStop, tdrSettings.gateShape);
+    } catch {
+      return null;
+    }
+  }, [tdrSettings, tdrData]);
   // console.log("chosenNoiseParameter", chosenNoiseParameter);
 
   const handleSnackbarClick = () => {
@@ -175,6 +305,16 @@ function App() {
                 nonIdealUsed={nonIdealUsed}
                 showIdeal={showIdeal}
                 setShowIdeal={setShowIdeal}
+                calPlaneLength_m={calPlaneLength_m}
+                calPlaneEeff={parseFloat(calSettings.planeEeff) || 1}
+                calPlaneEnabled={calSettings.enabled}
+                peLength_m={peLength_m}
+                peEeff={parseFloat(peSettings.eeff) || 1}
+                peEnabled={peSettings.enabled}
+                uncertaintyBands={uncertaintyBands}
+                gatedSParamData={gatedSParamData}
+                tdrData={tdrData}
+                tdrSettings={tdrSettings}
               />
             </Card>
           </Grid>
@@ -199,6 +339,7 @@ function App() {
                   noiseArray={noiseArray}
                   RefIn={RefIn}
                   zo={settingsFloat.zo}
+                  uncertaintyBands={uncertaintyBands}
                 />
               </CardContent>
             </Card>
@@ -215,6 +356,22 @@ function App() {
                 />
               </CardContent>
             </Card>
+          </Grid>
+          <Grid size={12}>
+            <VnaTools
+              calSettings={calSettings}
+              setCalSettings={setCalSettings}
+              peSettings={peSettings}
+              setPeSettings={setPeSettings}
+              deembedSettings={deembedSettings}
+              setDeembedSettings={setDeembedSettings}
+              tdrSettings={tdrSettings}
+              setTdrSettings={setTdrSettings}
+              uncertaintySettings={uncertaintySettings}
+              setUncertaintySettings={setUncertaintySettings}
+              sparamData={sParameters ? sParameters.data : null}
+              zo={settingsFloat.zo}
+            />
           </Grid>
           <Grid size={12}>
             <Tutorials />

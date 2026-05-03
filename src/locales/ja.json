@@ -228,7 +228,11 @@
     "version": "バージョン",
     "date": "日付",
     "notes": "内容",
-    "v21": ["Sパラメータ部品を追加", "s2p利得用の利得円を追加", "Sパラメータ関連チュートリアルを追加"],
+    "v21": [
+      "Sパラメータ部品を追加",
+      "s2p利得用の利得円を追加",
+      "Sパラメータ関連チュートリアルを追加"
+    ],
     "v20a": "サイトをwill-kelsey.com/smith_chart/からonlinesmithchart.comへ移転",
     "v20b": "サイト全体を書き直しました。6年以上にわたり旧サイトに機能が追加されコードは複雑化し、実装をコードで確認するユーザには負担でした。いまは整理・最適化されています。将来はコミュニティによる機能追加を期待しています。",
     "v20c": "バニラJSからReact+MUIへ。lintの実行、保守性、ファイルサイズの削減などの利点があります。",
@@ -252,5 +256,87 @@
   },
   "errors": {
     "sparamUrlTooLong": "保存された状態に1000文字超のSパラファイルが含まれていました。保存されなかったため手動で再入力してください"
+  },
+  "vna": {
+    "title": "VNA 学習ツール",
+    "activeCount": "{{n}} 個有効",
+    "cal": {
+      "on": "オン",
+      "off": "オフ",
+      "enabled": "校正を有効化",
+      "calType": "校正タイプ",
+      "standardType": "スタンダードモデル",
+      "ideal": "理想",
+      "realistic": "実際",
+      "realisticDesc": "各スタンダードの残差モデルパラメータを入力してください",
+      "openStd": "開放スタンダード",
+      "shortStd": "短絡スタンダード",
+      "loadStd": "負荷スタンダード",
+      "fringe_c0": "フリンジキャパシタンス C0",
+      "residual_l0": "残留インダクタンス L0",
+      "r_offset": "残留抵抗",
+      "planeSectionTitle": "校正面オフセット",
+      "planeLength": "オフセット長",
+      "planeHint": "校正面マーカー（赤破線）がスミスチャートと TDR プロットで更新されます。"
+    },
+    "tabs": {
+      "calibration": "校正",
+      "portExtension": "ポート延長",
+      "deembedding": "埋め込み / 取り外し",
+      "tdr": "TDR / ゲーティング",
+      "uncertainty": "不確かさ"
+    },
+    "pe": {
+      "enabled": "ポート延長を有効化",
+      "length": "延長長",
+      "delayInfo": "往復電気遅延：{{delay}} ns",
+      "desc": "ポート延長は電気遅延を追加して参照面を移動させます。",
+      "clear": "延長をクリア"
+    },
+    "de": {
+      "enabled": "取り外しを有効化",
+      "mode": "モード",
+      "deembed": "取り外し",
+      "embed": "埋め込み",
+      "fixtureSource": "フィクスチャモデル",
+      "tline": "理想伝送線",
+      "sparam": "S パラメータファイル",
+      "fixtureLength": "フィクスチャ長",
+      "deembedDesc": "取り外しは測定データからフィクスチャ S パラメータを除去します。",
+      "embedDesc": "埋め込みは DUT にフィクスチャ S パラメータを追加します。",
+      "sparamHint": ".s2p ファイルをフィクスチャモデルとしてアップロードします。非対称フィクスチャにはポートごとに別ファイルを使用してください。"
+    },
+    "tdr": {
+      "enabled": "TDR を有効化",
+      "mode": "変換モード",
+      "bandpass": "バンドパス",
+      "lpImpulse": "LP インパルス",
+      "lpStep": "LP ステップ",
+      "window": "窓関数",
+      "resolutionInfo": "分解能：{{res_ns}} ns（{{res_mm}} mm）| 最大時間幅：{{span_ns}} ns",
+      "noData": "S パラメータデータがロードされていません。",
+      "plotTitle": "時間領域応答",
+      "gateApplied": "ゲート適用済み — ゲートされたトレース（緑破線）が元のトレースとスミスチャートに表示されます。",
+      "gateTitle": "時間領域ゲーティング",
+      "gateEnabled": "ゲートを有効化",
+      "gateStart": "開始",
+      "gateStop": "終了",
+      "gateCenter": "中心",
+      "gateSpan": "幅",
+      "gateShape": "ゲート形状",
+      "gate_minimum": "最小",
+      "gate_nominal": "標準",
+      "gate_wide": "広い",
+      "gate_maximum": "最大",
+      "gateHint": "いずれかのフィールドを編集すると他のフィールドが自動更新されます。"
+    },
+    "unc": {
+      "enabled": "不確かさを有効化",
+      "noiseFloor": "ノイズフロア",
+      "repeatability": "ケーブル/コネクタの繰り返し性",
+      "desc": "不確かさ帯域はすべての S11 振幅グラフと、スミスチャート上の楕円で表示されます。",
+      "plotTitle": "S11 ±不確かさ帯域",
+      "maxUnc": "最大不確かさ：±{{v}} dB（{{f}} {{unit}}、支配要因：{{src}}）"
+    }
   }
 }

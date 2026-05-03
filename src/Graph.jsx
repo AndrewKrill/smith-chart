@@ -23,8 +23,9 @@ import Box from "@mui/material/Box";
 import Snackbar from "@mui/material/Snackbar";
 import SnackbarContent from "@mui/material/SnackbarContent";
 
-import { arcColors, processImpedance, parseInput, reflToZ, polarToRectangular, unitConverter } from "./commonFunctions.js";
+import { arcColors, processImpedance, parseInput, reflToZ, polarToRectangular, unitConverter, rectangularToPolar } from "./commonFunctions.js";
 import { sparamNoiseCircles, sparamGainCircles, stabilityCircles } from "./sparam.js";
+import { speedOfLight } from "./commonFunctions.js";
 
 // Dedicated S-parameter stroke colors (Okabe–Ito–style); avoids clashing with arcColors used for Z traces
 const sParamColorLut = {
@@ -89,6 +90,17 @@ function Graph({
   nonIdealUsed,
   showIdeal,
   setShowIdeal,
+  // VNA tool props
+  calPlaneLength_m,
+  calPlaneEeff,
+  calPlaneEnabled,
+  peLength_m,
+  peEeff,
+  peEnabled,
+  uncertaintyBands,
+  gatedSParamData,
+  tdrData,
+  tdrSettings,
 }) {
   const { t } = useTranslation();
   const svgRef = useRef(null);
@@ -106,6 +118,11 @@ function Graph({
   const impedanceArcsRef = useRef(null);
   const dpCirclesRef = useRef(null);
   const [hoverImpedance, setHoverImpedance] = useState([0, 0, 0]);
+  // VNA overlay refs
+  const calPlaneRef = useRef(null);
+  const peArcRef = useRef(null);
+  const uncertaintyRef = useRef(null);
+  const gatedTraceRef = useRef(null);
   const [hSnaps, setHSnaps] = useState([]);
   const [sSnaps, setSSnaps] = useState([]);
   const [width, setWidth] = useState(650);
@@ -677,6 +694,160 @@ function Graph({
     setHSnaps(hoverSnaps);
   }, [zResultsSrc, zo, spanResults, width, plotType, frequency, showZPlots]);
 
+  // ---------------------------------------------------------------------------
+  // VNA overlay: Calibration-plane marker (dashed radial line + label)
+  // ---------------------------------------------------------------------------
+  useEffect(() => {
+    const svg = d3.select(calPlaneRef.current);
+    svg.selectAll("*").remove();
+    if (!calPlaneEnabled || !calPlaneLength_m || calPlaneLength_m === 0) return;
+
+    // The cal-plane shifts the phase by θ = 2·β·ℓ
+    const beta = (2 * Math.PI * frequency * Math.sqrt(calPlaneEeff || 1)) / speedOfLight;
+    const theta = 2 * beta * calPlaneLength_m; // total two-way phase shift (radians)
+
+    // On the Smith chart the phase angle of the reference plane is −theta (rotating clockwise)
+    // Draw as a dashed radial line from center to the edge of the outer circle
+    const lineAngle = -theta; // angle from right (+x direction) in SVG space
+    const r = width * 0.5; // radius of Smith chart outer circle
+    const x2 = r * Math.cos(lineAngle);
+    const y2 = r * Math.sin(lineAngle);
+
+    // Draw dashed radial line
+    svg.append("line")
+      .attr("x1", 0).attr("y1", 0)
+      .attr("x2", x2).attr("y2", y2)
+      .attr("stroke", "#e03535")
+      .attr("stroke-width", 2)
+      .attr("stroke-dasharray", "6,4");
+
+    // Small arc near edge to indicate the plane
+    const arcR = r * 0.88;
+    const arcSpan = 0.12; // radians each side
+    const arcPath = d3.arc()({
+      innerRadius: arcR,
+      outerRadius: arcR + 6,
+      startAngle: lineAngle - arcSpan + Math.PI / 2,
+      endAngle: lineAngle + arcSpan + Math.PI / 2,
+    });
+    svg.append("path")
+      .attr("d", arcPath)
+      .attr("fill", "#e03535")
+      .attr("stroke", "none");
+
+    // Label
+    const lx = (r * 0.75) * Math.cos(lineAngle);
+    const ly = (r * 0.75) * Math.sin(lineAngle);
+    const phaseDegs = ((theta * 180) / Math.PI).toFixed(1);
+    createLabel(svg, lx, ly, `Cal Plane (−${phaseDegs}°)`);
+  }, [calPlaneEnabled, calPlaneLength_m, calPlaneEeff, frequency, width]);
+
+  // ---------------------------------------------------------------------------
+  // VNA overlay: Port-extension arc (second lighter S11 trace showing pre-extension)
+  // ---------------------------------------------------------------------------
+  useEffect(() => {
+    const svg = d3.select(peArcRef.current);
+    svg.selectAll("*").remove();
+    if (!peEnabled || !peLength_m || peLength_m === 0 || !sParameters) return;
+
+    const sparamData = sParameters.data;
+    const coord = [];
+    for (const fStr in sparamData) {
+      const f = Number(fStr);
+      const beta = (2 * Math.PI * f * Math.sqrt(peEeff || 1)) / speedOfLight;
+      const theta = 2 * beta * peLength_m;
+      // Reverse-rotate the corrected S11 to get the pre-extension position
+      const s11 = polarToRectangular(sparamData[fStr].S11);
+      const undoneRe = s11.real * Math.cos(theta) - s11.imaginary * Math.sin(theta);
+      const undoneIm = s11.real * Math.sin(theta) + s11.imaginary * Math.cos(theta);
+      const z = reflToZ({ real: undoneRe, imaginary: undoneIm }, sParameters.settings.zo);
+      coord.push(impedanceToSmithChart(z.real / zo, z.imaginary / zo, width));
+    }
+    if (coord.length < 2) return;
+    const path = `M ${coord[0][0]} ${coord[0][1]} ` + coord.map((c) => `L ${c[0]} ${c[1]}`).join(" ");
+    svg.append("path")
+      .attr("stroke-linecap", "round")
+      .attr("stroke-linejoin", "round")
+      .attr("fill", "none")
+      .attr("stroke", "rgba(0,114,178,0.35)")
+      .attr("stroke-width", 1.5)
+      .attr("stroke-dasharray", "4,3")
+      .attr("d", path);
+
+    // Label one end
+    if (coord.length > 0) {
+      createLabel(svg, coord[0][0], Number(coord[0][1]) - 12, "Pre-ext");
+    }
+  }, [peEnabled, peLength_m, peEeff, sParameters, zo, width]);
+
+  // ---------------------------------------------------------------------------
+  // VNA overlay: Uncertainty ellipses around each S11 frequency point
+  // ---------------------------------------------------------------------------
+  useEffect(() => {
+    const svg = d3.select(uncertaintyRef.current);
+    svg.selectAll("*").remove();
+    if (!uncertaintyBands || !uncertaintyBands.freqs || uncertaintyBands.freqs.length === 0) return;
+    if (!sParameters || !sParameters.data) return;
+
+    const { freqs, delta_dB } = uncertaintyBands;
+    freqs.forEach((f, i) => {
+      const point = sParameters.data[f];
+      if (!point) return;
+      const s11 = polarToRectangular(point.S11);
+      const z = reflToZ(s11, sParameters.settings.zo);
+      const [cx, cy] = impedanceToSmithChart(z.real / zo, z.imaginary / zo, width);
+
+      // Convert ±delta_dB back to a Γ radius uncertainty for display
+      const gammaMag = point.S11.magnitude;
+      const dGamma = gammaMag * (1 - Math.pow(10, -Math.abs(delta_dB[i]) / 20));
+      const r_px = Math.max(2, dGamma * width * 0.5);
+
+      svg.append("ellipse")
+        .attr("cx", cx).attr("cy", cy)
+        .attr("rx", r_px).attr("ry", r_px)
+        .attr("fill", "rgba(200,100,0,0.12)")
+        .attr("stroke", "rgba(200,100,0,0.4)")
+        .attr("stroke-width", 1);
+    });
+  }, [uncertaintyBands, sParameters, zo, width]);
+
+  // ---------------------------------------------------------------------------
+  // VNA overlay: Gated trace (when gating is active show both original and gated)
+  // ---------------------------------------------------------------------------
+  useEffect(() => {
+    const svg = d3.select(gatedTraceRef.current);
+    svg.selectAll("*").remove();
+    if (!gatedSParamData || !sParameters) return;
+
+    const { gatedFdMag, gatedFdPhase, freqAxis } = gatedSParamData;
+    if (!freqAxis || freqAxis.length === 0) return;
+
+    // Map gated frequency-domain back to Smith chart coordinates
+    const coord = [];
+    for (let k = 0; k < freqAxis.length; k++) {
+      const mag = gatedFdMag[k];
+      const phase_deg = gatedFdPhase[k];
+      const rect = polarToRectangular({ magnitude: mag, angle: phase_deg });
+      const z = reflToZ(rect, sParameters.settings.zo);
+      coord.push(impedanceToSmithChart(z.real / zo, z.imaginary / zo, width));
+    }
+    if (coord.length < 2) return;
+
+    const path = `M ${coord[0][0]} ${coord[0][1]} ` + coord.map((c) => `L ${c[0]} ${c[1]}`).join(" ");
+    svg.append("path")
+      .attr("stroke-linecap", "round")
+      .attr("stroke-linejoin", "round")
+      .attr("fill", "none")
+      .attr("stroke", "#009900")
+      .attr("stroke-width", 2)
+      .attr("stroke-dasharray", "6,3")
+      .attr("d", path);
+
+    if (coord.length > 0) {
+      createLabel(svg, coord[0][0], Number(coord[0][1]) - 12, "Gated");
+    }
+  }, [gatedSParamData, sParameters, zo, width]);
+
   //draw the labels
   useEffect(() => {
     var svgLabels = d3.select(labelsRef.current);
@@ -846,6 +1017,11 @@ function Graph({
                 <g id="impedanceArc" ref={impedanceArcsRef} />
                 <g id="dpCircles" ref={dpCirclesRef} />
                 <g id="hoverRects" ref={hoverRectsRef} />
+                {/* VNA overlays */}
+                <g id="peArc" ref={peArcRef} />
+                <g id="gatedTrace" ref={gatedTraceRef} />
+                <g id="uncertaintyEllipses" ref={uncertaintyRef} />
+                <g id="calPlane" ref={calPlaneRef} />
               </g>
             </svg>
           </div>

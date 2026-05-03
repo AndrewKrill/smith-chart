@@ -178,37 +178,24 @@ export function computeErrorTerms(standards, calType) {
 /**
  * Internal: solve the 3-term SOLT system given three standards.
  *
- * For each standard we have: Γm = e00 + e10e01·Γa / (1 − e11·Γa)
- * Rearranging: Γm − e00 − e11·Γm·Γa + e00·e11·Γa = e10e01·Γa
- * Let x=[e00, e11, e10e01], and build 3×3 system.
+ * Standard HP/Agilent 3-term error model (1-port):
+ *   Γm = e00 + e10e01·Γa / (1 − e11·Γa)
+ *
+ * Rearranging into a linear system using C = e10e01 − e00·e11:
+ *   Γm = e00 + C·Γa + e11·Γm·Γa
+ *   i.e. [1, Γa, +Γm·Γa] · [e00, C, e11]^T = Γm
+ *
+ * After solving for [e00, C, e11]:
+ *   e10e01 = C + e00·e11
  */
 function _solveThreeTerm(s_open, s_short, s_load) {
-  // Build system Ax = b for x = [e00, e11*e10e01, e10e01]
-  // The three-term error model can be solved by the 8-term formulation reduced to 1-port:
-  //   Γm = (e00 + (e10e01 − e00·e11)·Γa) / (1 − e11·Γa)
-  // Cross-multiplying: Γm·(1 − e11·Γa) = e00 + (e10e01 − e00·e11)·Γa
-  // This is a linear system in [e00, e11, e10e01]:
-  //   Γm = e00 + e10e01·Γa − e11·Γm·Γa
-  //
-  // In matrix form [Γm, −Γm·Γa, Γa] · [e00, e11, e10e01]^T = ... wait,
-  // let's rewrite: e00·(1) + e11·(−Γm·Γa) + e10e01·(Γa) = Γm − 0
-  // But that's wrong because there's an implicit coupling. Use the standard
-  // 3-unknowns formulation: define M = Γm, A = Γa_actual
-  //   M(1 − e11·A) = e00 + (e10e01 − e00·e11)·A
-  //   M = e00 + e10e01·A − e11·M·A  ... (*)
-  // Let a = e00, b = e11, c = e10e01
-  //   a + c·A − b·M·A = M   →  1*a − (M*A)*b + A*c = M
-  // Three equations for three standards:
-  //   [1, −Mo·Ao, Ao] [a]   [Mo]
-  //   [1, −Ms·As, As] [b] = [Ms]
-  //   [1, −Ml·Al, Al] [c]   [Ml]
-
   function solveRow(m, a) {
+    // [e00 coeff, C coeff, e11 coeff, RHS]
     return [
-      { real: 1, imaginary: 0 }, // coefficient of e00
-      { real: -m.real * a.real + m.imaginary * a.imaginary, imaginary: -m.real * a.imaginary - m.imaginary * a.real }, // coefficient of e11: −M·A
-      a, // coefficient of e10e01: A
-      m, // RHS
+      { real: 1, imaginary: 0 },                                                                               // coeff of e00: 1
+      a,                                                                                                        // coeff of C: Γa
+      { real: m.real * a.real - m.imaginary * a.imaginary, imaginary: m.real * a.imaginary + m.imaginary * a.real }, // coeff of e11: +Γm·Γa
+      m,                                                                                                        // RHS: Γm
     ];
   }
 
@@ -223,13 +210,17 @@ function _solveThreeTerm(s_open, s_short, s_load) {
   const r1 = solveRow(Ms, As);
   const r2 = solveRow(Ml, Al);
 
-  // Solve 3×3 complex system using Cramer's rule
-  const [e00, e11, e10e01] = _solveCramer3x3(
+  // Solve 3×3 complex system for [e00, C, e11]
+  const [e00, C, e11] = _solveCramer3x3(
     [r0[0], r0[1], r0[2]],
     [r1[0], r1[1], r1[2]],
     [r2[0], r2[1], r2[2]],
     [r0[3], r1[3], r2[3]],
   );
+
+  // Recover e10e01 = C + e00·e11
+  const e10e01 = complex_add(C, complex_multiply(e00, e11));
+
   return { e00, e11, e10e01 };
 }
 
@@ -291,8 +282,7 @@ export function applyCalibration(rawS11, errorTerms) {
  * @param {number} frequency - frequency in Hz
  * @returns {{e00,e11,e10e01}} shifted error terms
  */
-export function moveCalPlane(errorTerms, length, zo, eeff, frequency) {
-  void zo; // zo does not alter the phase shift magnitude, kept for clarity
+export function moveCalPlane(errorTerms, length, _zo, eeff, frequency) {
   const beta = (2 * Math.PI * frequency * Math.sqrt(eeff)) / speedOfLight;
   const theta = 2 * beta * length; // total electrical length (2-way)
   const phasor = {

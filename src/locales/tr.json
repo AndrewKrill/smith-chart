@@ -228,7 +228,11 @@
     "version": "Sürüm",
     "date": "Tarih",
     "notes": "Notlar",
-    "v21": ["S-parametre bileşeni eklendi", "s2p kazancı için kazanç çemberleri eklendi", "Birkaç s-parametre öğreticisi eklendi"],
+    "v21": [
+      "S-parametre bileşeni eklendi",
+      "s2p kazancı için kazanç çemberleri eklendi",
+      "Birkaç s-parametre öğreticisi eklendi"
+    ],
     "v20a": "Site will-kelsey.com/smith_chart/ adresinden onlinesmithchart.com adresine taşındı",
     "v20b": "Tüm site yeniden yazıldı. 6 yıldan uzun sürede eski siteye birçok özellik eklendiği için kod çok dağınıktı. Bazı kullanıcılar doğrulama için koda bakıyordu; bu zordu. Artık kod daha düzenli ve optimize. İleride topluluğun depoya özellik ve iyileştirme eklemesini umuyorum.",
     "v20c": "Vanilya JS’ten React + MUI’ye geçildi. Bu; lint çalıştırma, daha sürdürülebilir kod, daha küçük paket ve ana akıma uyumdan gelen birçok küçük avantaj sağlar",
@@ -252,5 +256,87 @@
   },
   "errors": {
     "sparamUrlTooLong": "Kaydedilen durum 1000+ karakterlik bir s-parametre dosyası içeriyordu. Bu URL’ye kaydedilmedi; el ile yeniden girmeniz gerekir"
+  },
+  "vna": {
+    "title": "VNA Öğretim Araçları",
+    "activeCount": "{{n}} etkin",
+    "cal": {
+      "on": "Açık",
+      "off": "Kapalı",
+      "enabled": "Kalibrasyon etkin",
+      "calType": "Cal türü",
+      "standardType": "Standart modeli",
+      "ideal": "İdeal",
+      "realistic": "Gerçekçi",
+      "realisticDesc": "Her standart için artık model parametrelerini girin",
+      "openStd": "Açık standart",
+      "shortStd": "Kısa devre standardı",
+      "loadStd": "Yük standardı",
+      "fringe_c0": "Saçak kapasitansı C0",
+      "residual_l0": "Artık indüktans L0",
+      "r_offset": "Artık direnç",
+      "planeSectionTitle": "Kalibrasyon düzlemi ofseti",
+      "planeLength": "Ofset uzunluğu",
+      "planeHint": "Kalibrasyon düzlemi işaretçisi (kırmızı kesikli çizgi) Smith şeması ve TDR grafiğinde güncellenecektir."
+    },
+    "tabs": {
+      "calibration": "Kalibrasyon",
+      "portExtension": "Port Uzatma",
+      "deembedding": "Gömme / Sökme",
+      "tdr": "TDR / Geçit",
+      "uncertainty": "Belirsizlik"
+    },
+    "pe": {
+      "enabled": "Port uzatma etkin",
+      "length": "Uzatma uzunluğu",
+      "delayInfo": "Gidiş-dönüş elektriksel gecikme: {{delay}} ns",
+      "desc": "Port uzatma, referans düzlemini elektriksel gecikme ekleyerek kaydırır.",
+      "clear": "Uzatmayı temizle"
+    },
+    "de": {
+      "enabled": "Sökme etkin",
+      "mode": "Mod",
+      "deembed": "Söküm",
+      "embed": "Gömme",
+      "fixtureSource": "Fikstür modeli",
+      "tline": "İdeal T hattı",
+      "sparam": "S-param dosyası",
+      "fixtureLength": "Fikstür uzunluğu",
+      "deembedDesc": "Söküm, ölçülen verilerden fikstür S parametrelerini kaldırır.",
+      "embedDesc": "Gömme, DUT'a fikstür S parametrelerini ekler.",
+      "sparamHint": "Fikstür modeli olarak .s2p dosyası yükleyin. Asimetrik fikstürler için her port için ayrı dosya kullanın."
+    },
+    "tdr": {
+      "enabled": "TDR etkin",
+      "mode": "Dönüşüm modu",
+      "bandpass": "Bant geçiren",
+      "lpImpulse": "Alçak geçiren dürtü",
+      "lpStep": "Alçak geçiren basamak",
+      "window": "Pencere",
+      "resolutionInfo": "Çözünürlük: {{res_ns}} ns ({{res_mm}} mm) | Maks süre: {{span_ns}} ns",
+      "noData": "S-param verisi yüklenmedi.",
+      "plotTitle": "Zaman alanı yanıtı",
+      "gateApplied": "Geçit uygulandı — geçitlenmiş iz (yeşil kesikli) Smith şemasında orijinalle birlikte gösterilir.",
+      "gateTitle": "Zaman alanı geçiti",
+      "gateEnabled": "Geçit etkin",
+      "gateStart": "Başlangıç",
+      "gateStop": "Bitiş",
+      "gateCenter": "Merkez",
+      "gateSpan": "Genişlik",
+      "gateShape": "Geçit biçimi",
+      "gate_minimum": "Minimum",
+      "gate_nominal": "Nominal",
+      "gate_wide": "Geniş",
+      "gate_maximum": "Maksimum",
+      "gateHint": "Herhangi bir alanı düzenlemek diğerlerini otomatik günceller."
+    },
+    "unc": {
+      "enabled": "Belirsizlik etkin",
+      "noiseFloor": "Gürültü tabanı",
+      "repeatability": "Kablo/konektör tekrarlanabilirliği",
+      "desc": "Belirsizlik bantları tüm S11 büyüklük grafiklerinde ve Smith şemasında elips olarak gösterilir.",
+      "plotTitle": "S11 ±belirsizlik bantları",
+      "maxUnc": "Maks belirsizlik: ±{{v}} dB, {{f}} {{unit}} (baskın: {{src}})"
+    }
   }
 }
