@@ -267,7 +267,10 @@ function App() {
     const zo = sf.zo;
 
     // Components between the cal plane and the VNA port (the "fixture").
-    // planeDP=0 means the cal plane is AT the source node, so there is no fixture.
+    // userCircuit is ordered from the load/termination (index 0) toward the VNA port
+    // (highest index).  Components at indices > planeDP are therefore between the
+    // cal plane and the VNA port.  When planeDP is the last component there is no
+    // fixture (empty slice), which correctly gives identity error terms.
     const fixtureComps = userCircuit.slice(calSettings.planeDP + 1);
 
     // Frequency list taken from the already-synthesized raw data.
@@ -276,9 +279,11 @@ function App() {
     // Synthesize what the VNA would *measure* for each standard by running the
     // standard through the fixture.  Very-large/small R values approximate the
     // ideal Γ = +1 / −1 without requiring special-case math.
-    const openZ = { real: 1e15, imaginary: 0 };  // Γ ≈ +1
-    const shortZ = { real: 1e-9, imaginary: 0 };  // Γ ≈ −1
-    const loadZ  = { real: zo,   imaginary: 0 };  // Γ = 0
+    const OPEN_APPROX_R  = 1e15; // R → ∞  →  Γ ≈ +1  (Open)
+    const SHORT_APPROX_R = 1e-9; // R → 0   →  Γ ≈ −1  (Short)
+    const openZ  = { real: OPEN_APPROX_R,  imaginary: 0 };
+    const shortZ = { real: SHORT_APPROX_R, imaginary: 0 };
+    const loadZ  = { real: zo,             imaginary: 0 };
 
     const measuredOpen  = synthesizeS11FromCircuit([openZ,  ...fixtureComps], frequencies, zo) ?? {};
     const measuredShort = synthesizeS11FromCircuit([shortZ, ...fixtureComps], frequencies, zo) ?? {};
