@@ -354,15 +354,21 @@ export function applyGate(tdData, tStart, tStop, gateShape = "nominal") {
   }
   fftInPlace(fftRe, fftIm, false); // forward FFT
 
-  // Build frequency axis (first half of FFT)
+  // Build frequency axis.
+  // Only the first M bins (original measured frequency count) carry meaningful
+  // spectral content; bins beyond M were zero-padded and produce artefacts.
   const halfN = Math.floor(N / 2);
+  const M = df > 0 ? Math.round((fStop - fStart) / df) + 1 : halfN;
+  const nOut = Math.min(halfN, M);
   const freqAxis = [];
   const gatedFdMag = [];
   const gatedFdPhase = [];
-  for (let k = 0; k < halfN; k++) {
+  for (let k = 0; k < nOut; k++) {
     const fk = fStart + k * df;
     freqAxis.push(fk);
-    const mag = Math.sqrt(fftRe[k] * fftRe[k] + fftIm[k] * fftIm[k]) / N;
+    // The IFFT already divided by N; the forward FFT does not, so no extra
+    // /N is needed here.
+    const mag = Math.sqrt(fftRe[k] * fftRe[k] + fftIm[k] * fftIm[k]);
     const phase = (Math.atan2(fftIm[k], fftRe[k]) * 180) / Math.PI;
     gatedFdMag.push(mag);
     gatedFdPhase.push(phase);
