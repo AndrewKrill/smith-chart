@@ -344,7 +344,8 @@
       "repeatability": "Kablo/konektör tekrarlanabilirliği",
       "desc": "Belirsizlik bantları tüm S11 büyüklük grafiklerinde ve Smith şemasında elips olarak gösterilir.",
       "plotTitle": "S11 ±belirsizlik bantları",
-      "maxUnc": "Maks belirsizlik: ±{{v}} dB, {{f}} {{unit}} (baskın: {{src}})"
+      "maxUnc": "Maks belirsizlik: ±{{v}} dB, {{f}} {{unit}} (baskın: {{src}})",
+      "pathAttenuation": "Bağlantı yolu zayıflaması"
     },
     "pipeline": {
       "splitChart": "Show corrections on second chart",

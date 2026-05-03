@@ -344,7 +344,8 @@
       "repeatability": "केबल/कनेक्टर दोहरावशीलता",
       "desc": "अनिश्चितता बैंड सभी S11 आयाम प्लॉट पर और स्मिथ चार्ट पर दीर्घवृत्त के रूप में दिखाई देते हैं।",
       "plotTitle": "S11 ±अनिश्चितता बैंड",
-      "maxUnc": "अधिकतम अनिश्चितता: ±{{v}} dB {{f}} {{unit}} पर (प्रमुख: {{src}})"
+      "maxUnc": "अधिकतम अनिश्चितता: ±{{v}} dB {{f}} {{unit}} पर (प्रमुख: {{src}})",
+      "pathAttenuation": "कनेक्शन पथ क्षीणन"
     },
     "pipeline": {
       "splitChart": "Show corrections on second chart",

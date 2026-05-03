@@ -738,10 +738,21 @@ function TdrTab({ tdrSettings, setTdrSettings, sparamData, isSynthesized, zo }) 
 // ---------------------------------------------------------------------------
 // Tab 5: Noise Floor & Uncertainty
 // ---------------------------------------------------------------------------
-function UncertaintyTab({ uncertaintySettings, setUncertaintySettings }) {
+function UncertaintyTab({ uncertaintySettings, setUncertaintySettings, uncertaintyBands, centerFrequency }) {
   const { t } = useTranslation();
   const us = uncertaintySettings;
   const set = (key, val) => setUncertaintySettings((s) => ({ ...s, [key]: val }));
+
+  // Format the worst-case summary from uncertaintyBands
+  const HZ_TO_GHZ = 1e9;
+  const maxSummary = uncertaintyBands && uncertaintyBands.freqs && uncertaintyBands.freqs.length > 0
+    ? (() => {
+        const { maxUncertainty_dB, maxUncertainty_f, dominantSource } = uncertaintyBands;
+        const f_GHz = (maxUncertainty_f / HZ_TO_GHZ).toFixed(3);
+        const unc_dB = maxUncertainty_dB.toFixed(2);
+        return t("vna.unc.maxUnc", { v: unc_dB, f: f_GHz, unit: "GHz", src: dominantSource });
+      })()
+    : null;
 
   return (
     <Box>
@@ -784,9 +795,29 @@ function UncertaintyTab({ uncertaintySettings, setUncertaintySettings }) {
           </FieldCell>
         </Row>
 
+        <Row>
+          <LabelCell>{t("vna.unc.pathAttenuation")}</LabelCell>
+          <FieldCell>
+            <TextField
+              size="small"
+              label={t("vna.unc.pathAttenuation")}
+              value={us.pathAttenuation_dB}
+              onChange={(e) => set("pathAttenuation_dB", parseInput(e.target.value))}
+              slotProps={{ input: { endAdornment: <InputAdornment position="end">dB</InputAdornment> } }}
+              sx={{ width: 150 }}
+            />
+          </FieldCell>
+        </Row>
+
         <Alert severity="info" sx={{ mt: 1 }}>
           {t("vna.unc.desc")}
         </Alert>
+
+        {maxSummary && (
+          <Alert severity="warning" sx={{ mt: 1 }}>
+            {maxSummary}
+          </Alert>
+        )}
       </Collapse>
     </Box>
   );
@@ -811,6 +842,7 @@ export default function VnaTools({
   setTdrSettings,
   uncertaintySettings,
   setUncertaintySettings,
+  uncertaintyBands,
   sparamData,
   isSynthesized,
   circuitLength,
@@ -915,7 +947,7 @@ export default function VnaTools({
         {tab === 3 && (
           <TdrTab tdrSettings={tdrSettings} setTdrSettings={setTdrSettings} sparamData={sparamData} isSynthesized={isSynthesized} zo={zo} />
         )}
-        {tab === 4 && <UncertaintyTab uncertaintySettings={uncertaintySettings} setUncertaintySettings={setUncertaintySettings} />}
+        {tab === 4 && <UncertaintyTab uncertaintySettings={uncertaintySettings} setUncertaintySettings={setUncertaintySettings} uncertaintyBands={uncertaintyBands} centerFrequency={centerFrequency} />}
       </AccordionDetails>
     </Accordion>
   );

@@ -72,11 +72,18 @@ export function computeResidualErrors(f, zo, realisticParams) {
 /**
  * Compute worst-case uncertainty magnitude on |S11| at one frequency point.
  *
- * δΓ_total = Ed + |Γ_dut|·Et + |Γ_dut|²·Es + noise_Γ + repeatability_Γ
+ * δΓ_total = Ed + |Γ_dut|·Et + |Γ_dut|²·Es + noise_Γ_eff + repeatability_Γ
  *
  * where:
- *   noise_Γ = 10^(noiseFloor_dB/20)      (−80 dBc → 0.0001)
+ *   noise_Γ = 10^(noiseFloor_dB/20)      (−60 dBc → 0.001)
  *   repeatability_Γ = 10^(repeat_dB/20)  (user-set ±dB)
+ *
+ *   noise_Γ_eff = noise_Γ / 10^(pathAttenuation_dB/10)
+ *     Path attenuation between the calibration plane and the DUT (e.g. a lossy
+ *     cable or attenuator) degrades the effective noise floor.  A one-way power
+ *     loss of A_dB results in a two-way (round-trip) Γ amplitude loss of A_dB,
+ *     so the noise floor Γ grows by the same factor: noise_Γ_eff = noise_Γ / A_lin
+ *     where A_lin = 10^(pathAttenuation_dB/10) is the one-way power ratio.
  *
  * @param {number} gammaMag - |S11| (linear) at this frequency
  * @param {number} f - frequency in Hz
@@ -84,13 +91,16 @@ export function computeResidualErrors(f, zo, realisticParams) {
  * @param {{
  *   noiseFloor_dB: number,
  *   repeatability_dB: number,
+ *   pathAttenuation_dB: number,
  *   useIdeal: boolean,
  *   realisticParams: Object
  * }} uncertaintySettings
- * @returns {{deltaGamma:number, Ed:number, Es:number, Et:number, noise_Γ:number, repeat_Γ:number}}
+ * @returns {{deltaGamma:number, Ed:number, Es:number, Et:number, noise_G:number, repeat_G:number, pathAtten_G:number}}
+ *
+ * (noise_G is the effective noise floor Γ after applying path attenuation)
  */
 export function uncertaintyAtPoint(gammaMag, f, zo, uncertaintySettings) {
-  const { noiseFloor_dB = -80, repeatability_dB = -60, useIdeal = true, realisticParams = {} } = uncertaintySettings || {};
+  const { noiseFloor_dB = -60, repeatability_dB = -50, pathAttenuation_dB = 0, useIdeal = true, realisticParams = {} } = uncertaintySettings || {};
 
   let Ed = 0;
   let Es = 0;
@@ -99,12 +109,22 @@ export function uncertaintyAtPoint(gammaMag, f, zo, uncertaintySettings) {
     ({ Ed, Es, Et } = computeResidualErrors(f, zo, realisticParams));
   }
 
-  const noise_G = Math.pow(10, noiseFloor_dB / 20);
+  const noise_G_raw = Math.pow(10, noiseFloor_dB / 20);
   const repeat_G = Math.pow(10, repeatability_dB / 20);
+
+  // Path attenuation degrades the noise floor at the DUT. A one-way power
+  // loss of pathAttenuation_dB means the received signal is weaker, so the
+  // minimum detectable Γ grows: noise_G_eff = noise_G_raw / 10^(A_dB/10).
+  // Guard against zero or near-zero path attenuation to avoid division by zero
+  const pathAtten_lin = Math.pow(10, pathAttenuation_dB / 10);
+  const noise_G = noise_G_raw / Math.max(pathAtten_lin, 1e-15); // 1e-15: prevent division by zero
+
+  // Expose the degradation contribution separately for dominant-source reporting
+  const pathAtten_G = noise_G - noise_G_raw;
 
   const deltaGamma = Ed + gammaMag * Et + gammaMag * gammaMag * Es + noise_G + repeat_G;
 
-  return { deltaGamma, Ed, Es, Et, noise_G, repeat_G };
+  return { deltaGamma, Ed, Es, Et, noise_G, repeat_G, pathAtten_G };
 }
 
 // ---------------------------------------------------------------------------
@@ -154,13 +174,14 @@ export function computeUncertaintyBands(sparamData, zo, uncertaintySettings) {
   let maxEt = 0;
   let maxNoise = 0;
   let maxRepeat = 0;
+  let maxPathAtten = 0;
 
   for (const f of freqs) {
     const point = sparamData[f];
     const gammaMag = point.S11.magnitude;
     const s11dB = 20 * Math.log10(Math.max(gammaMag, 1e-15));
 
-    const { deltaGamma, Ed, Es, Et, noise_G, repeat_G } = uncertaintyAtPoint(gammaMag, f, zo, uncertaintySettings);
+    const { deltaGamma, Ed, Es, Et, noise_G, repeat_G, pathAtten_G } = uncertaintyAtPoint(gammaMag, f, zo, uncertaintySettings);
 
     // Convert uncertainty to dB
     const upperMag = Math.min(gammaMag + deltaGamma, 1.0 - 1e-9);
@@ -183,11 +204,12 @@ export function computeUncertaintyBands(sparamData, zo, uncertaintySettings) {
       maxEt = Et;
       maxNoise = noise_G;
       maxRepeat = repeat_G;
+      maxPathAtten = pathAtten_G;
     }
   }
 
   // Dominant error source at worst-case frequency
-  const sources = { directivity: maxEd, sourceMatch: maxEs, tracking: maxEt, noise: maxNoise, repeatability: maxRepeat };
+  const sources = { directivity: maxEd, sourceMatch: maxEs, tracking: maxEt, noise: maxNoise, repeatability: maxRepeat, pathAttenuation: maxPathAtten };
   const dominantSource = Object.keys(sources).reduce((a, b) => (sources[a] >= sources[b] ? a : b));
 
   return {

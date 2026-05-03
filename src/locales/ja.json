@@ -344,7 +344,8 @@
       "repeatability": "ケーブル/コネクタの繰り返し性",
       "desc": "不確かさ帯域はすべての S11 振幅グラフと、スミスチャート上の楕円で表示されます。",
       "plotTitle": "S11 ±不確かさ帯域",
-      "maxUnc": "最大不確かさ：±{{v}} dB（{{f}} {{unit}}、支配要因：{{src}}）"
+      "maxUnc": "最大不確かさ：±{{v}} dB（{{f}} {{unit}}、支配要因：{{src}}）",
+      "pathAttenuation": "接続パス減衰量"
     },
     "pipeline": {
       "splitChart": "Show corrections on second chart",

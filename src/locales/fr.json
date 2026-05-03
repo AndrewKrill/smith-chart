@@ -344,7 +344,8 @@
       "repeatability": "Répétabilité",
       "desc": "Bandes d'incertitude sur les graphiques S11 et ellipses sur l'abaque.",
       "plotTitle": "S11 ±incertitude",
-      "maxUnc": "Incertitude max : ±{{v}} dB à {{f}} {{unit}} (dominante : {{src}})"
+      "maxUnc": "Incertitude max : ±{{v}} dB à {{f}} {{unit}} (dominante : {{src}})",
+      "pathAttenuation": "Atténuation du chemin de connexion"
     },
     "pipeline": {
       "splitChart": "Show corrections on second chart",

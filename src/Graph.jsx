@@ -104,6 +104,8 @@ function Graph({
   tdrSettings,
   // Background (raw/uncorrected) trace shown in overlay mode
   backgroundSParamData,
+  // Effective (synthesized or file) s-param data for overlays when no file is loaded
+  effectiveSpData,
 }) {
   const { t } = useTranslation();
   const svgRef = useRef(null);
@@ -807,11 +809,10 @@ function Graph({
     svg.selectAll("*").remove();
     if (!uncertaintyBands || !uncertaintyBands.freqs || uncertaintyBands.freqs.length === 0) return;
 
-    const sparamData = sParameters ? sParameters.data : null;
+    const sparamData = sParameters ? sParameters.data : effectiveSpData;
     const refZo = sParameters?.settings?.zo || zo;
     const { freqs, delta_dB } = uncertaintyBands;
     freqs.forEach((f, i) => {
-      // Try to find the data point either from sParameters or effectiveSParamData (passed indirectly via uncertaintyBands)
       const point = sparamData ? sparamData[f] : null;
       if (!point) return;
       const s11 = polarToRectangular(point.S11);
@@ -833,7 +834,7 @@ function Graph({
         .attr("stroke", "rgba(200,100,0,0.4)")
         .attr("stroke-width", 1);
     });
-  }, [uncertaintyBands, sParameters, zo, width]);
+  }, [uncertaintyBands, sParameters, effectiveSpData, zo, width]);
 
   // ---------------------------------------------------------------------------
   // VNA overlay: Gated trace (when gating is active show both original and gated)

@@ -98,8 +98,9 @@ const initialTdrSettings = {
 
 const initialUncertaintySettings = {
   enabled: false,
-  noiseFloor_dB: -80,
-  repeatability_dB: -60,
+  noiseFloor_dB: -60,
+  repeatability_dB: -50,
+  pathAttenuation_dB: 0,
   useIdeal: true,
   realisticParams: {},
 };
@@ -239,8 +240,62 @@ function App() {
     return applyPortExtension(synthesizedSParamData, lenM, parseFloat(peSettings.eeff) || 1);
   }, [synthesizedSParamData, peSettings]);
 
+  // ---------------------------------------------------------------------------
+  // Calibration-plane re-referencing for synthesized data
+  // ---------------------------------------------------------------------------
+
+  // S11 of the circuit as seen FROM the calibration plane (userCircuit[planeDP] onwards).
+  // When calibration is enabled with a planeDP, this moves that point to the Smith chart centre.
+  const calCorrectedSynData = useMemo(() => {
+    if (!calSettings.enabled || calSettings.planeDP === null || calSettings.planeDP === undefined) return null;
+    const fromPlane = userCircuit.slice(calSettings.planeDP);
+    if (fromPlane.length === 0) return null;
+    // Skip re-referencing if the slice still contains an S-param file component;
+    // synthesizeS11FromCircuit cannot handle file-based components.
+    if (fromPlane.findIndex((c) => c.name === "sparam") !== -1) return null;
+
+    const sf = convertSettingsToFloat(JSON.parse(JSON.stringify(settings)));
+    const centerF = sf.frequency * unitConverter[settings.frequencyUnit];
+    const fSpanHz = sf.fSpan * unitConverter[settings.fSpanUnit];
+    const nPoints = tdrSettings.synthPoints || 201;
+
+    let fMin, fMax;
+    if (tdrSettings.synthFmin !== null && tdrSettings.synthFmax !== null) {
+      fMin = tdrSettings.synthFmin;
+      fMax = tdrSettings.synthFmax;
+    } else if (fSpanHz > 0) {
+      fMin = Math.max(centerF - fSpanHz, 1); // 1 Hz minimum: avoids log-scale/near-DC issues
+      fMax = centerF + fSpanHz;
+    } else {
+      fMin = centerF * 0.5;
+      fMax = centerF * 1.5;
+    }
+    const frequencies = [];
+    for (let i = 0; i < nPoints; i++) {
+      frequencies.push(fMin + (i * (fMax - fMin)) / (nPoints - 1));
+    }
+    return synthesizeS11FromCircuit(fromPlane, frequencies, sf.zo);
+  }, [calSettings.enabled, calSettings.planeDP, userCircuit, settings, tdrSettings.synthPoints, tdrSettings.synthFmin, tdrSettings.synthFmax]);
+
+  // Base synthesized data (before PE): use the cal-corrected view when calibration
+  // plane is active, otherwise use the full circuit synthesis.
+  const synBaseData = useMemo(() => {
+    if (!sParameters && calSettings.enabled && calSettings.planeDP !== null && calCorrectedSynData) {
+      return calCorrectedSynData;
+    }
+    return synthesizedSParamData;
+  }, [sParameters, calSettings.enabled, calSettings.planeDP, calCorrectedSynData, synthesizedSParamData]);
+
+  // Port-extension applied to the chosen base synthesized data
+  const effectiveSynData = useMemo(() => {
+    if (!synBaseData || !peSettings.enabled) return synBaseData;
+    const lenM = parseFloat(peSettings.length) * (unitConverter[peSettings.unit] || 1e-3);
+    if (!lenM || lenM === 0) return synBaseData;
+    return applyPortExtension(synBaseData, lenM, parseFloat(peSettings.eeff) || 1);
+  }, [synBaseData, peSettings]);
+
   // Unified S-param data: loaded file (corrected) or synthesized circuit response
-  const effectiveSParamData = sParameters ? sParameters.data : peAppliedSynData;
+  const effectiveSParamData = sParameters ? sParameters.data : effectiveSynData;
 
   // Calibration-plane synthesized trace: S11 of circuit truncated at planeDP
   const calPlaneSynData = useMemo(() => {
@@ -304,20 +359,25 @@ function App() {
     return sParameters?.settings?.zo || rawSParametersObject?.settings?.zo || settingsFloat.zo;
   }, [sParameters, rawSParametersObject, settingsFloat.zo]);
 
-  // Is any VNA correction active on loaded S-param data?
-  const anyVnaActive = rawSParamData != null && (activeStages.cal || activeStages.deembed || activeStages.pe || activeStages.gating);
+  // Is any VNA feature active that affects the displayed data?
+  // Works with both loaded S-param files and synthesized circuit data.
+  const anyVnaActive =
+    effectiveSParamData != null &&
+    (activeStages.cal || activeStages.deembed || activeStages.pe || activeStages.gating || uncertaintySettings.enabled);
 
-  // Intermediate trace data keyed by stage name, for the second Smith chart
+  // Intermediate trace data keyed by stage name, for the second Smith chart.
+  // When no file is loaded, fall back to synthesized equivalents.
   const intermediateTraces = {
-    raw: rawSParamData,
-    afterCal: activeStages.cal ? afterCalData : null,
+    raw: rawSParamData ?? synthesizedSParamData,
+    afterCal: activeStages.cal ? (afterCalData ?? calCorrectedSynData) : null,
     afterDeembed: activeStages.deembed ? afterDeembedData : null,
-    afterPe: activeStages.pe ? afterPeData : null,
+    afterPe: activeStages.pe ? (afterPeData ?? peAppliedSynData) : null,
     afterGating: activeStages.gating ? gatedSParamData : null,
   };
 
-  // In overlay mode show the raw trace behind the corrected one on the primary chart
-  const backgroundSParamData = !splitSmithChart && anyVnaActive ? rawSParamData : null;
+  // In overlay mode, show the raw/uncorrected trace behind the corrected one —
+  // only meaningful when a file is loaded (synthesized data has no separate raw trace).
+  const backgroundSParamData = !splitSmithChart && rawSParamData != null && (activeStages.cal || activeStages.deembed || activeStages.pe || activeStages.gating) ? rawSParamData : null;
   // console.log("chosenNoiseParameter", chosenNoiseParameter);
 
   const handleSnackbarClick = () => {
@@ -417,12 +477,13 @@ function App() {
                 peLength_m={splitSmithChart ? 0 : peLength_m}
                 peEeff={parseFloat(peSettings.eeff) || 1}
                 peEnabled={splitSmithChart ? false : peSettings.enabled}
-                prePeSynData={splitSmithChart ? null : (sParameters ? null : synthesizedSParamData)}
+                prePeSynData={splitSmithChart ? null : (sParameters ? null : synBaseData)}
                 uncertaintyBands={splitSmithChart ? null : uncertaintyBands}
                 gatedSParamData={splitSmithChart ? null : gatedSParamData}
                 tdrData={tdrData}
                 tdrSettings={tdrSettings}
                 backgroundSParamData={backgroundSParamData}
+                effectiveSpData={splitSmithChart ? null : effectiveSParamData}
               />
             </Card>
           </Grid>
@@ -491,6 +552,7 @@ function App() {
               setTdrSettings={setTdrSettings}
               uncertaintySettings={uncertaintySettings}
               setUncertaintySettings={setUncertaintySettings}
+              uncertaintyBands={uncertaintyBands}
               sparamData={effectiveSParamData}
               isSynthesized={!sParameters}
               circuitLength={userCircuit.length}
