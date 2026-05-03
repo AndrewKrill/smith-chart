@@ -344,7 +344,8 @@
       "repeatability": "电缆/连接器重复性",
       "desc": "不确定度频带显示在所有 S11 幅度图上，并以椭圆形式显示在史密斯圆图上。",
       "plotTitle": "S11 ±不确定度频带",
-      "maxUnc": "最大不确定度：±{{v}} dB（{{f}} {{unit}}，主导来源：{{src}})"
+      "maxUnc": "最大不确定度：±{{v}} dB（{{f}} {{unit}}，主导来源：{{src}})",
+      "pathAttenuation": "连接路径衰减"
     },
     "pipeline": {
       "splitChart": "Show corrections on second chart",

@@ -344,7 +344,8 @@
       "repeatability": "Repetibilidad cable/conector",
       "desc": "Las bandas de incertidumbre se muestran en los gráficos de |S11| y como elipses en la carta de Smith.",
       "plotTitle": "S11 con bandas de ±incertidumbre",
-      "maxUnc": "Incertidumbre máx.: ±{{v}} dB a {{f}} {{unit}} (dominante: {{src}})"
+      "maxUnc": "Incertidumbre máx.: ±{{v}} dB a {{f}} {{unit}} (dominante: {{src}})",
+      "pathAttenuation": "Atenuación del trayecto de acceso"
     },
     "pipeline": {
       "splitChart": "Show corrections on second chart",

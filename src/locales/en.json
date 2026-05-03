@@ -344,7 +344,8 @@
       "repeatability": "Cable/connector repeatability",
       "desc": "Uncertainty bands (shaded) are shown on all S11 magnitude plots and as ellipses around frequency points on the Smith chart. Dominant error source and worst-case uncertainty are summarised below each plot.",
       "plotTitle": "S11 with ±Uncertainty Bands",
-      "maxUnc": "Max uncertainty: ±{{v}} dB at {{f}} {{unit}} (dominant: {{src}})"
+      "maxUnc": "Max uncertainty: ±{{v}} dB at {{f}} {{unit}} (dominant: {{src}})",
+      "pathAttenuation": "Fixture path attenuation"
     },
     "pipeline": {
       "splitChart": "Show corrections on second chart",
