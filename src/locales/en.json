@@ -95,7 +95,7 @@
     "zAng": "∠Z (°)",
     "zTolMag": "|Z|, tol {{i}}",
     "zTolAng": "∠Z, tol {{i}}",
-    "correctionStages": "VNA Correction Stages (|S11| dB and |Z| per stage)"
+    "correctionStages": "VNA Correction Stages (|S11|, ∠S11, |Z|, ∠Z per stage)"
   },
   "graph": {
     "downloadSvg": "Download SVG file",

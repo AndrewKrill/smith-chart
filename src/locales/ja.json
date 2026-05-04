@@ -94,7 +94,8 @@
     "zMag": "|Z| (Ω)",
     "zAng": "∠Z (°)",
     "zTolMag": "|Z|, tol {{i}}",
-    "zTolAng": "∠Z, tol {{i}}"
+    "zTolAng": "∠Z, tol {{i}}",
+    "correctionStages": "VNA 補正ステージ（各ステージの |S11|、∠S11、|Z|、∠Z）"
   },
   "graph": {
     "downloadSvg": "SVGファイルをダウンロード",

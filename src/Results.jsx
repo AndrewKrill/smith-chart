@@ -249,23 +249,28 @@ function localizedOptionsGainInit(t) {
 }
 
 // ---------------------------------------------------------------------------
-// Helper: convert a frequency-keyed S11 polar dataset to |S11|_dB and |Z| arrays
+// Helper: convert a frequency-keyed S11 polar dataset to |S11|_dB, ∠S11, |Z|, and ∠Z arrays
 // ---------------------------------------------------------------------------
 function sparamToTraceArrays(sparamData, freqUnit, zo) {
   const sortedFreqs = Object.keys(sparamData).sort((a, b) => a - b);
   const fAxis = sortedFreqs.map((fx) => fx / unitConverter[freqUnit]);
   const s11dBArr = [];
+  const s11AngArr = [];
   const zMagArr = [];
+  const zAngArr = [];
   for (const fx of sortedFreqs) {
     const entry = sparamData[fx];
     if (!entry || !entry.S11) {
       s11dBArr.push(null);
+      s11AngArr.push(null);
       zMagArr.push(null);
+      zAngArr.push(null);
       continue;
     }
     const { magnitude, angle } = entry.S11;
     s11dBArr.push(20 * Math.log10(Math.max(magnitude, 1e-15)));
-    // |Z| = |Zo * (1 + Γ) / (1 - Γ)|
+    s11AngArr.push(angle);
+    // Z = Zo * (1 + Γ) / (1 - Γ)
     const rect = polarToRectangular({ magnitude, angle });
     const num = { real: 1 + rect.real, imaginary: rect.imaginary };
     const den = { real: 1 - rect.real, imaginary: -rect.imaginary };
@@ -273,12 +278,13 @@ function sparamToTraceArrays(sparamData, freqUnit, zo) {
     const zRe = zo * (num.real * den.real + num.imaginary * den.imaginary) / Math.max(denMag2, 1e-30);
     const zIm = zo * (num.imaginary * den.real - num.real * den.imaginary) / Math.max(denMag2, 1e-30);
     zMagArr.push(Math.sqrt(zRe * zRe + zIm * zIm));
+    zAngArr.push(Math.atan2(zIm, zRe) * 180 / Math.PI);
   }
-  return { fAxis, s11dBArr, zMagArr };
+  return { fAxis, s11dBArr, s11AngArr, zMagArr, zAngArr };
 }
 
 // ---------------------------------------------------------------------------
-// Intermediate-stage overlay charts for |S11| (dB) and |Z| (Ω)
+// Intermediate-stage overlay charts for |S11| (dB), ∠S11 (°), |Z| (Ω), and ∠Z (°)
 // ---------------------------------------------------------------------------
 function IntermediateTracesPlots({ intermediateTraces, activeStages, sParamZo, freqUnit, commonOptions }) {
   const { t } = useTranslation();
@@ -305,66 +311,53 @@ function IntermediateTracesPlots({ intermediateTraces, activeStages, sParamZo, f
   const width = commonOptions?.width ?? 500;
   const height = 220;
 
-  // Build |S11| dB chart data
-  const s11Series = [{ label: `Freq (${freqUnit})` }];
-  const s11Data = [null]; // placeholder for fAxis (filled from first stage)
-  let fAxis = null;
-  for (const stage of stagesWithData) {
-    const { fAxis: fa, s11dBArr } = sparamToTraceArrays(intermediateTraces[stage.key], freqUnit, sParamZo);
-    if (!fAxis) {
-      fAxis = fa;
-      s11Data[0] = fAxis;
-    }
-    s11Data.push(s11dBArr);
-    s11Series.push({
-      label: t(stage.labelKey),
-      stroke: stage.color,
-      width: stage.widthPx ?? 1.5,
-      dash: stage.dash ? stage.dash.split(",").map(Number) : undefined,
-      scale: "y",
-    });
-  }
+  // Pre-compute all trace arrays once per stage
+  const traceArraysByStage = stagesWithData.map((stage) =>
+    sparamToTraceArrays(intermediateTraces[stage.key], freqUnit, sParamZo)
+  );
 
+  // Shared frequency axis (from first stage)
+  const fAxis = traceArraysByStage[0].fAxis;
   if (!fAxis || fAxis.length === 0) return null;
 
-  // Build |Z| magnitude chart data
-  const zSeries = [{ label: `Freq (${freqUnit})` }];
-  const zData = [fAxis];
-  for (const stage of stagesWithData) {
-    const { zMagArr } = sparamToTraceArrays(intermediateTraces[stage.key], freqUnit, sParamZo);
-    zData.push(zMagArr);
-    zSeries.push({
-      label: t(stage.labelKey),
-      stroke: stage.color,
-      width: stage.widthPx ?? 1.5,
-      dash: stage.dash ? stage.dash.split(",").map(Number) : undefined,
-      scale: "y",
+  // Helper: build a uPlot series/data pair for a given array extractor
+  function buildChart(yLabel, extractor) {
+    const series = [{ label: `Freq (${freqUnit})` }];
+    const data = [fAxis];
+    stagesWithData.forEach((stage, i) => {
+      data.push(traceArraysByStage[i][extractor]);
+      series.push({
+        label: t(stage.labelKey),
+        stroke: stage.color,
+        width: stage.widthPx ?? 1.5,
+        dash: stage.dash ? stage.dash.split(",").map(Number) : undefined,
+        scale: "y",
+      });
     });
+    const options = {
+      width,
+      height,
+      series,
+      axes: [{ label: `Freq (${freqUnit})` }, { scale: "y", label: yLabel }],
+      scales: { x: { time: false }, y: { auto: true } },
+    };
+    return { options, data };
   }
 
-  const s11Opt = {
-    width,
-    height,
-    series: s11Series,
-    axes: [{ label: `Freq (${freqUnit})` }, { scale: "y", label: "|S11| (dB)" }],
-    scales: { x: { time: false }, y: { auto: true } },
-  };
-
-  const zOpt = {
-    width,
-    height,
-    series: zSeries,
-    axes: [{ label: `Freq (${freqUnit})` }, { scale: "y", label: "|Z| (Ω)" }],
-    scales: { x: { time: false }, y: { auto: true } },
-  };
+  const s11dB  = buildChart(t("results.s11db"),  "s11dBArr");
+  const s11Ang = buildChart(t("results.s11ang"), "s11AngArr");
+  const zMag   = buildChart(t("results.zMag"),   "zMagArr");
+  const zAng   = buildChart(t("results.zAng"),   "zAngArr");
 
   return (
     <Box sx={{ mt: 2 }}>
       <Typography variant="subtitle2" sx={{ mb: 0.5 }}>
         {t("results.correctionStages")}
       </Typography>
-      <UplotReact options={s11Opt} data={s11Data} />
-      <UplotReact options={zOpt} data={zData} />
+      <UplotReact options={s11dB.options}  data={s11dB.data} />
+      <UplotReact options={s11Ang.options} data={s11Ang.data} />
+      <UplotReact options={zMag.options}   data={zMag.data} />
+      <UplotReact options={zAng.options}   data={zAng.data} />
     </Box>
   );
 }
@@ -755,6 +748,13 @@ export default function Results({ zProc, spanResults, freqUnit, plotType, sParam
           <SpanTolerancePlot spanResultsByTol={spanResults} options={optionsZTol} freqUnit={freqUnit} zo={zo} plotKind="z" />
           <SpanTolerancePlot spanResultsByTol={spanResults} options={optionsS11Tol} freqUnit={freqUnit} zo={zo} plotKind="s11" />
           <UncertaintyPlot uncertaintyBands={uncertaintyBands} options={optionsS11} freqUnit={freqUnit} />
+          <IntermediateTracesPlots
+            intermediateTraces={intermediateTraces}
+            activeStages={activeStages}
+            sParamZo={sParamZo ?? zo}
+            freqUnit={freqUnit}
+            commonOptions={commonOptions}
+          />
           <Typography sx={{ textAlign: "center", mt: 2 }}>
             {t("results.assuming")}{" "}
             <i>

@@ -94,7 +94,8 @@
     "zMag": "|Z| (Ω)",
     "zAng": "∠Z (°)",
     "zTolMag": "|Z|，容差 {{i}}",
-    "zTolAng": "∠Z，容差 {{i}}"
+    "zTolAng": "∠Z，容差 {{i}}",
+    "correctionStages": "VNA 校正阶段（每阶段 |S11|、∠S11、|Z|、∠Z）"
   },
   "graph": {
     "downloadSvg": "下载 SVG 文件",
