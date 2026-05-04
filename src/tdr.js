@@ -330,17 +330,15 @@ export function applyGate(tdData, tStart, tStop, gateShape = "nominal", gateNotc
   const beta = gateShapeToKaiserBeta[gateShape] ?? 9;
   const dt = timeAxis[1] - timeAxis[0];
 
-  // Compute the full (unclamped) gate index range so that the Kaiser window is
-  // sized over the ENTIRE [tStart, tStop] span even when tStart < 0 or
-  // tStop > tMax.  Clamping only happens when we index into the time-domain
-  // arrays; the Kaiser window offset is preserved so that, for example, a gate
-  // of [-2 ns, +2 ns] centres its peak on t = 0 rather than at the start.
+  // Compute the full (unclamped) gate index range.  tStart and/or tStop may be
+  // negative (wrapping to near the end of the periodic IFFT buffer) or may
+  // exceed the total time span (wrapping to the beginning).  The IFFT output is
+  // a circular sequence with period N, so we use modular arithmetic rather than
+  // clamping.  gateLen_full is capped at N to ensure each sample is touched at
+  // most once.
   const i0_raw = Math.round(tStart / dt);
   const i1_raw = Math.round(tStop / dt);
-  const i0 = Math.max(0, i0_raw);
-  const i1 = Math.min(N - 1, i1_raw);
-  const gateLen_full = i1_raw - i0_raw + 1;             // Kaiser window length (full span)
-  const kaiserOffset = i0 - i0_raw;                     // samples skipped from the left
+  const gateLen_full = Math.min(i1_raw - i0_raw + 1, N); // Kaiser window length (full span, capped at N)
   const gateWin = gateLen_full > 1 ? kaiserWindow(gateLen_full, beta) : [1];
 
   // Apply gate window
@@ -348,22 +346,25 @@ export function applyGate(tdData, tStart, tStop, gateShape = "nominal", gateNotc
   const gatedIm = new Float64Array(N);
 
   if (!gateNotch) {
-    // Passband: keep only the gate window, zero everything outside
-    for (let i = i0; i <= i1; i++) {
-      const w = gateWin[i - i0 + kaiserOffset];
-      gatedRe[i] = realPart[i] * w;
-      gatedIm[i] = imagPart[i] * w;
+    // Passband: keep only the gate window, zero everything outside.
+    // Use circular (modulo N) indexing so that negative tStart wraps to the
+    // end of the array (e.g. -27 ns ≡ 1973 ns when the span is 2000 ns).
+    for (let wi = 0; wi < gateLen_full; wi++) {
+      const i = ((i0_raw + wi) % N + N) % N;
+      gatedRe[i] = realPart[i] * gateWin[wi];
+      gatedIm[i] = imagPart[i] * gateWin[wi];
     }
   } else {
-    // Notch: pass everything outside, suppress inside with Kaiser-weighted attenuation
+    // Notch: pass everything outside, suppress inside with Kaiser-weighted attenuation.
     for (let i = 0; i < N; i++) {
       gatedRe[i] = realPart[i];
       gatedIm[i] = imagPart[i];
     }
-    for (let i = i0; i <= i1; i++) {
-      const w = gateWin[i - i0 + kaiserOffset]; // Kaiser window: ~0 at edges → ~1 at center; (1-w) inverts for notch suppression
-      gatedRe[i] = realPart[i] * (1 - w);
-      gatedIm[i] = imagPart[i] * (1 - w);
+    for (let wi = 0; wi < gateLen_full; wi++) {
+      const i = ((i0_raw + wi) % N + N) % N;
+      // Kaiser window: ~0 at edges → ~1 at center; (1-w) inverts for notch suppression
+      gatedRe[i] = realPart[i] * (1 - gateWin[wi]);
+      gatedIm[i] = imagPart[i] * (1 - gateWin[wi]);
     }
   }
 
