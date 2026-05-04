@@ -211,6 +211,36 @@ function App() {
     const sf = convertSettingsToFloat(JSON.parse(JSON.stringify(settings)));
     const centerF = sf.frequency * unitConverter[settings.frequencyUnit];
     const fSpanHz = sf.fSpan * unitConverter[settings.fSpanUnit];
+
+    let fMin, fMax;
+    if (fSpanHz > 0) {
+      fMin = Math.max(centerF - fSpanHz, 1);
+      fMax = centerF + fSpanHz;
+    } else {
+      // Default: ±50 % of centre frequency
+      fMin = centerF * 0.5;
+      fMax = centerF * 1.5;
+    }
+
+    const frequencies = [];
+    for (let i = 0; i < 201; i++) {
+      frequencies.push(fMin + (i * (fMax - fMin)) / 200);
+    }
+    return synthesizeS11FromCircuit(userCircuit, frequencies, sf.zo);
+  }, [userCircuit, settings]);
+
+  // TDR-specific synthesized S-param data — uses the TDR bandwidth settings
+  // (synthFmin / synthFmax / synthPoints) so the TDR transform sees a wide,
+  // uniformly-spaced sweep.  This is kept separate from synthesizedSParamData
+  // so that the display pipeline (Smith chart traces) is never affected by TDR
+  // frequency settings.
+  const tdrSynthSParamData = useMemo(() => {
+    const sParamIdx = userCircuit.findIndex((c) => c.name === "sparam");
+    if (sParamIdx !== -1) return null; // file loaded — TDR will use effectiveSParamData
+
+    const sf = convertSettingsToFloat(JSON.parse(JSON.stringify(settings)));
+    const centerF = sf.frequency * unitConverter[settings.frequencyUnit];
+    const fSpanHz = sf.fSpan * unitConverter[settings.fSpanUnit];
     const nPoints = tdrSettings.synthPoints || 201;
 
     let fMin, fMax;
@@ -221,7 +251,6 @@ function App() {
       fMin = Math.max(centerF - fSpanHz, 1);
       fMax = centerF + fSpanHz;
     } else {
-      // Default: ±50 % of centre frequency
       fMin = centerF * 0.5;
       fMax = centerF * 1.5;
     }
@@ -232,14 +261,6 @@ function App() {
     }
     return synthesizeS11FromCircuit(userCircuit, frequencies, sf.zo);
   }, [userCircuit, settings, tdrSettings.synthPoints, tdrSettings.synthFmin, tdrSettings.synthFmax]);
-
-  // Port-extension applied to synthesized data (only when no S-param file)
-  const peAppliedSynData = useMemo(() => {
-    if (!synthesizedSParamData || !peSettings.enabled) return synthesizedSParamData;
-    const lenM = parseFloat(peSettings.length) * (unitConverter[peSettings.unit] || 1e-3);
-    if (!lenM || lenM === 0) return synthesizedSParamData;
-    return applyPortExtension(synthesizedSParamData, lenM, parseFloat(peSettings.eeff) || 1);
-  }, [synthesizedSParamData, peSettings]);
 
   // ---------------------------------------------------------------------------
   // Calibration-plane re-referencing for synthesized data
@@ -345,12 +366,26 @@ function App() {
     return synthesizeS11FromCircuit(truncated, frequencies, sf.zo);
   }, [calSettings.enabled, calSettings.planeDP, userCircuit, synthesizedSParamData, settings]);
 
-  // TDR computation (uses corrected s-params or synthesized data)
+  // Port-extension applied to TDR-specific synthesized data so that TDR sees the
+  // same corrections as the display pipeline but over the TDR frequency range.
+  const tdrEffectiveSynData = useMemo(() => {
+    if (!tdrSynthSParamData || !peSettings.enabled) return tdrSynthSParamData;
+    const lenM = parseFloat(peSettings.length) * (unitConverter[peSettings.unit] || 1e-3);
+    if (!lenM || lenM === 0) return tdrSynthSParamData;
+    return applyPortExtension(tdrSynthSParamData, lenM, parseFloat(peSettings.eeff) || 1);
+  }, [tdrSynthSParamData, peSettings]);
+
+  // TDR computation.
+  // When a file is loaded, use effectiveSParamData (the fully corrected file data).
+  // When no file is loaded, use tdrEffectiveSynData so the TDR-specific frequency
+  // range (synthFmin/synthFmax) only affects the TDR transform, not the display
+  // pipeline (which is driven by synthesizedSParamData).
   const tdrData = useMemo(() => {
-    if (!tdrSettings.enabled || !effectiveSParamData) return null;
-    if (Object.keys(effectiveSParamData).length < 2) return null;
-    return frequencyToTimeDomain(effectiveSParamData, tdrSettings.mode, tdrSettings.window);
-  }, [tdrSettings.enabled, tdrSettings.mode, tdrSettings.window, effectiveSParamData]);
+    if (!tdrSettings.enabled) return null;
+    const tdrInput = sParameters ? effectiveSParamData : tdrEffectiveSynData;
+    if (!tdrInput || Object.keys(tdrInput).length < 2) return null;
+    return frequencyToTimeDomain(tdrInput, tdrSettings.mode, tdrSettings.window);
+  }, [tdrSettings.enabled, tdrSettings.mode, tdrSettings.window, effectiveSParamData, tdrEffectiveSynData, sParameters]);
 
   // Per-frequency fixture path attenuation (auto-computed when cal plane is active).
   // Uses components on the DUT side of the calibration plane (indices 0..planeDP-1).
@@ -636,7 +671,7 @@ function App() {
               setUncertaintySettings={setUncertaintySettings}
               uncertaintyBands={uncertaintyBands}
               fixturePathAttenuation_dB={fixturePathAttenuation_dB}
-              sparamData={effectiveSParamData}
+              sparamData={sParameters ? effectiveSParamData : (tdrEffectiveSynData ?? effectiveSParamData)}
               isSynthesized={!sParameters}
               circuitLength={userCircuit.length}
               zo={settingsFloat.zo}
