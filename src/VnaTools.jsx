@@ -453,8 +453,8 @@ function TdrTab({ tdrSettings, setTdrSettings, sparamData, isSynthesized, zo }) 
   // Gated data
   const gatedData = useMemo(() => {
     if (!tdData || !ts.gateEnabled) return null;
-    return applyGate(tdData, ts.gateStart || 0, ts.gateStop || 1e-9, ts.gateShape);
-  }, [tdData, ts.gateEnabled, ts.gateStart, ts.gateStop, ts.gateShape]);
+    return applyGate(tdData, ts.gateStart || 0, ts.gateStop || 1e-9, ts.gateShape, ts.gateNotch);
+  }, [tdData, ts.gateEnabled, ts.gateStart, ts.gateStop, ts.gateShape, ts.gateNotch]);
 
   // Chart resize
   useEffect(() => {
@@ -720,6 +720,16 @@ function TdrTab({ tdrSettings, setTdrSettings, sparamData, isSynthesized, zo }) 
                         {t(`vna.tdr.gate_${g}`)}
                       </ToggleButton>
                     ))}
+                  </ToggleButtonGroup>
+                </FieldCell>
+              </Row>
+
+              <Row>
+                <LabelCell>{t("vna.tdr.gateMode")}</LabelCell>
+                <FieldCell>
+                  <ToggleButtonGroup value={ts.gateNotch ? "notch" : "passband"} exclusive onChange={(_, v) => v && set("gateNotch", v === "notch")} size="small">
+                    <ToggleButton value="passband">{t("vna.tdr.gatePassband")}</ToggleButton>
+                    <ToggleButton value="notch">{t("vna.tdr.gateNotch")}</ToggleButton>
                   </ToggleButtonGroup>
                 </FieldCell>
               </Row>

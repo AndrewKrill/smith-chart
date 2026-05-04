@@ -336,7 +336,10 @@
       "synthBandwidth": "Synthesis bandwidth",
       "synthFmin": "Start frequency (Hz)",
       "synthFmax": "Stop frequency (Hz)",
-      "synthPoints": "Points"
+      "synthPoints": "Points",
+      "gateMode": "Gate mode",
+      "gatePassband": "Passband",
+      "gateNotch": "Notch (reject)"
     },
     "unc": {
       "enabled": "Uncertainty enabled",
