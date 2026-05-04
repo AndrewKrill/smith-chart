@@ -602,6 +602,9 @@ function App() {
                   RefIn={RefIn}
                   zo={settingsFloat.zo}
                   uncertaintyBands={uncertaintyBands}
+                  intermediateTraces={intermediateTraces}
+                  activeStages={activeStages}
+                  sParamZo={sParamZo}
                 />
               </CardContent>
             </Card>

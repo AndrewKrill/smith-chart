@@ -15,7 +15,7 @@
  * Reference: Rytting, "Improved RF hardware and calibration methods for network analyzers"
  */
 
-import { polarToRectangular, rectangularToPolar, speedOfLight } from "./commonFunctions.js";
+import { polarToRectangular, rectangularToPolar } from "./commonFunctions.js";
 import { realisticOpenGamma, realisticShortGamma, realisticLoadGamma, idealStandards } from "./calibration.js";
 
 // ---------------------------------------------------------------------------

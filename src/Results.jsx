@@ -5,7 +5,8 @@ import UplotReact from "uplot-react";
 import { useState, useRef, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 
-import { processImpedance, rectangularToPolar, unitConverter } from "./commonFunctions";
+import { processImpedance, rectangularToPolar, polarToRectangular, unitConverter } from "./commonFunctions";
+import { VNA_STAGES } from "./vnaStages.js";
 
 function ImpedanceRes({ type, zStr, zPolarStr }) {
   return (
@@ -247,6 +248,126 @@ function localizedOptionsGainInit(t) {
   };
 }
 
+// ---------------------------------------------------------------------------
+// Helper: convert a frequency-keyed S11 polar dataset to |S11|_dB and |Z| arrays
+// ---------------------------------------------------------------------------
+function sparamToTraceArrays(sparamData, freqUnit, zo) {
+  const sortedFreqs = Object.keys(sparamData).sort((a, b) => a - b);
+  const fAxis = sortedFreqs.map((fx) => fx / unitConverter[freqUnit]);
+  const s11dBArr = [];
+  const zMagArr = [];
+  for (const fx of sortedFreqs) {
+    const entry = sparamData[fx];
+    if (!entry || !entry.S11) {
+      s11dBArr.push(null);
+      zMagArr.push(null);
+      continue;
+    }
+    const { magnitude, angle } = entry.S11;
+    s11dBArr.push(20 * Math.log10(Math.max(magnitude, 1e-15)));
+    // |Z| = |Zo * (1 + Γ) / (1 - Γ)|
+    const rect = polarToRectangular({ magnitude, angle });
+    const num = { real: 1 + rect.real, imaginary: rect.imaginary };
+    const den = { real: 1 - rect.real, imaginary: -rect.imaginary };
+    const denMag2 = den.real * den.real + den.imaginary * den.imaginary;
+    const zRe = zo * (num.real * den.real + num.imaginary * den.imaginary) / Math.max(denMag2, 1e-30);
+    const zIm = zo * (num.imaginary * den.real - num.real * den.imaginary) / Math.max(denMag2, 1e-30);
+    zMagArr.push(Math.sqrt(zRe * zRe + zIm * zIm));
+  }
+  return { fAxis, s11dBArr, zMagArr };
+}
+
+// ---------------------------------------------------------------------------
+// Intermediate-stage overlay charts for |S11| (dB) and |Z| (Ω)
+// ---------------------------------------------------------------------------
+function IntermediateTracesPlots({ intermediateTraces, activeStages, sParamZo, freqUnit, commonOptions }) {
+  const { t } = useTranslation();
+  if (!intermediateTraces || !activeStages) return null;
+
+  // Determine which stages have data and are active
+  const stagesWithData = VNA_STAGES.filter(({ key }) => {
+    const data = intermediateTraces[key];
+    if (!data || typeof data !== "object") return false;
+    if (Object.keys(data).length === 0) return false;
+    // "afterGating" uses {gatedFdMag, gatedFdPhase, freqAxis} format — skip if so
+    if ("gatedFdMag" in data) return false;
+    if (key === "raw") return true;
+    if (key === "afterCal") return activeStages.cal;
+    if (key === "afterDeembed") return activeStages.deembed;
+    if (key === "afterPe") return activeStages.pe;
+    if (key === "afterGating") return activeStages.gating;
+    return false;
+  });
+
+  if (stagesWithData.length === 0) return null;
+
+  const width = commonOptions?.width ?? 500;
+  const height = 220;
+
+  // Build |S11| dB chart data
+  const s11Series = [{ label: `Freq (${freqUnit})` }];
+  const s11Data = [null]; // placeholder for fAxis (filled from first stage)
+  let fAxis = null;
+  for (const stage of stagesWithData) {
+    const { fAxis: fa, s11dBArr } = sparamToTraceArrays(intermediateTraces[stage.key], freqUnit, sParamZo);
+    if (!fAxis) {
+      fAxis = fa;
+      s11Data[0] = fAxis;
+    }
+    s11Data.push(s11dBArr);
+    s11Series.push({
+      label: t(stage.labelKey),
+      stroke: stage.color,
+      width: stage.widthPx ?? 1.5,
+      dash: stage.dash ? stage.dash.split(",").map(Number) : undefined,
+      scale: "y",
+    });
+  }
+
+  if (!fAxis || fAxis.length === 0) return null;
+
+  // Build |Z| magnitude chart data
+  const zSeries = [{ label: `Freq (${freqUnit})` }];
+  const zData = [fAxis];
+  for (const stage of stagesWithData) {
+    const { zMagArr } = sparamToTraceArrays(intermediateTraces[stage.key], freqUnit, sParamZo);
+    zData.push(zMagArr);
+    zSeries.push({
+      label: t(stage.labelKey),
+      stroke: stage.color,
+      width: stage.widthPx ?? 1.5,
+      dash: stage.dash ? stage.dash.split(",").map(Number) : undefined,
+      scale: "y",
+    });
+  }
+
+  const s11Opt = {
+    width,
+    height,
+    series: s11Series,
+    axes: [{ label: `Freq (${freqUnit})` }, { scale: "y", label: "|S11| (dB)" }],
+    scales: { x: { time: false }, y: { auto: true } },
+  };
+
+  const zOpt = {
+    width,
+    height,
+    series: zSeries,
+    axes: [{ label: `Freq (${freqUnit})` }, { scale: "y", label: "|Z| (Ω)" }],
+    scales: { x: { time: false }, y: { auto: true } },
+  };
+
+  return (
+    <Box sx={{ mt: 2 }}>
+      <Typography variant="subtitle2" sx={{ mb: 0.5 }}>
+        {t("results.correctionStages")}
+      </Typography>
+      <UplotReact options={s11Opt} data={s11Data} />
+      <UplotReact options={zOpt} data={zData} />
+    </Box>
+  );
+}
+
 function SPlot({ sparametersData, options, freqUnit, title }) {
   const { t } = useTranslation();
   if (!sparametersData || sparametersData.length === 0) return null;
@@ -461,7 +582,7 @@ function UncertaintyPlot({ uncertaintyBands, options, freqUnit }) {
   );
 }
 
-export default function Results({ zProc, spanResults, freqUnit, plotType, sParameters, gainResults, noiseArray, RefIn, zo, uncertaintyBands }) {
+export default function Results({ zProc, spanResults, freqUnit, plotType, sParameters, gainResults, noiseArray, RefIn, zo, uncertaintyBands, intermediateTraces, activeStages, sParamZo }) {
   const { t, i18n } = useTranslation();
   const { zStr, zPolarStr, refStr, refPolarStr, vswr, qFactor } = zProc;
   const containerRef = useRef();
@@ -579,6 +700,13 @@ export default function Results({ zProc, spanResults, freqUnit, plotType, sParam
       <div ref={containerRef} style={{ width: "100%", marginTop: "30px" }}>
         <SPlot sparametersData={sparametersData} options={options4} freqUnit={freqUnit} title={t("results.rawData")} />
         <UncertaintyPlot uncertaintyBands={uncertaintyBands} options={optionsS11} freqUnit={freqUnit} />
+        <IntermediateTracesPlots
+          intermediateTraces={intermediateTraces}
+          activeStages={activeStages}
+          sParamZo={sParamZo ?? zo}
+          freqUnit={freqUnit}
+          commonOptions={commonOptions}
+        />
       </div>
     );
 
@@ -588,6 +716,13 @@ export default function Results({ zProc, spanResults, freqUnit, plotType, sParam
       <div ref={containerRef} style={{ width: "100%", marginTop: "30px" }}>
         <RPlot RefIn={RefIn} options={optionsS11} freqUnit={freqUnit} title={t("results.zDp1")} />
         <UncertaintyPlot uncertaintyBands={uncertaintyBands} options={optionsS11} freqUnit={freqUnit} />
+        <IntermediateTracesPlots
+          intermediateTraces={intermediateTraces}
+          activeStages={activeStages}
+          sParamZo={sParamZo ?? zo}
+          freqUnit={freqUnit}
+          commonOptions={commonOptions}
+        />
         <GainPlot gain={gainResults} options={optionsGain} freqUnit={freqUnit} title={t("results.systemGain")} legend={t("results.gainLegend")} />
         <GainPlot gain={noiseArray} options={optionsGain} freqUnit={freqUnit} title={t("results.noiseFigure")} legend={t("results.nfLegend")} />
       </div>
