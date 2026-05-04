@@ -767,8 +767,9 @@ function Graph({
         const beta = (2 * Math.PI * f * Math.sqrt(peEeff || 1)) / speedOfLight;
         const theta = 2 * beta * peLength_m;
         const s11 = polarToRectangular(sparamData[fStr].S11);
-        const undoneRe = s11.real * Math.cos(theta) - s11.imaginary * Math.sin(theta);
-        const undoneIm = s11.real * Math.sin(theta) + s11.imaginary * Math.cos(theta);
+        // Port extension now applies e^{+jθ}; undo by applying e^{-jθ}
+        const undoneRe = s11.real * Math.cos(theta) + s11.imaginary * Math.sin(theta);
+        const undoneIm = -s11.real * Math.sin(theta) + s11.imaginary * Math.cos(theta);
         const z = reflToZ({ real: undoneRe, imaginary: undoneIm }, refZo);
         coord.push(impedanceToSmithChart(z.real / zo, z.imaginary / zo, width));
       }
