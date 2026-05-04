@@ -355,7 +355,7 @@ function App() {
   // Per-frequency fixture path attenuation (auto-computed when cal plane is active).
   // Uses components on the DUT side of the calibration plane (indices 0..planeDP-1).
   const fixturePathAttenuation_dB = useMemo(() => {
-    if (!calSettings.enabled || calSettings.planeDP === null || calSettings.planeDP === undefined || calSettings.planeDP === 0) return null;
+    if (!calSettings.enabled || calSettings.planeDP == null || calSettings.planeDP === 0) return null;
     if (!effectiveSParamData) return null;
     const fixtureComps = userCircuit.slice(0, calSettings.planeDP);
     if (fixtureComps.length === 0) return null;

@@ -355,7 +355,7 @@ export function applyGate(tdData, tStart, tStop, gateShape = "nominal", gateNotc
       gatedIm[i] = imagPart[i];
     }
     for (let i = i0; i <= i1; i++) {
-      const w = gateWin[i - i0]; // 1 at edges → 0 at center of notch
+      const w = gateWin[i - i0]; // Kaiser window: ~0 at edges → ~1 at center; (1-w) inverts for notch suppression
       gatedRe[i] = realPart[i] * (1 - w);
       gatedIm[i] = imagPart[i] * (1 - w);
     }

@@ -53,7 +53,7 @@ export function computeFixturePathAttenuation_dB(fixtureComponents, frequencies,
 
       if (comp.name === "transmissionLine" || comp.name === "stub" || comp.name === "shortedStub") {
         // Lossy TL: attenuation = loss_dB_per_m * length
-        const lengthM = parseFloat(comp.value) * (comp.unit === "mm" ? 1e-3 : comp.unit === "um" ? 1e-6 : 1);
+        const lengthM = parseFloat(comp.value) * ({ mm: 1e-3, um: 1e-6, m: 1 }[comp.unit] ?? 1);
         const atten_dB_m = parseFloat(comp.attenuation_dB_m) || 0;
         if (atten_dB_m > 0 && lengthM > 0) {
           total_dB += atten_dB_m * lengthM;
