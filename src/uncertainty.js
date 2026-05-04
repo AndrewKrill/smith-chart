@@ -15,8 +15,63 @@
  * Reference: Rytting, "Improved RF hardware and calibration methods for network analyzers"
  */
 
-import { polarToRectangular, rectangularToPolar } from "./commonFunctions.js";
+import { polarToRectangular, rectangularToPolar, speedOfLight } from "./commonFunctions.js";
 import { realisticOpenGamma, realisticShortGamma, realisticLoadGamma, idealStandards } from "./calibration.js";
+
+// ---------------------------------------------------------------------------
+// Fixture path attenuation (auto-computed from component stackup)
+// ---------------------------------------------------------------------------
+
+/**
+ * Estimate the one-way fixture path attenuation in dB for each frequency,
+ * by cascading the fixture components between the DUT and the calibration plane.
+ *
+ * For ideal (lossless) transmission lines and lumped elements this returns 0 dB.
+ * For a lossy TL with a resistive loss model it returns 2·α·length (two-way).
+ *
+ * Supported component types:
+ *   - "transmissionLine": uses the line's Zo and Eeff to compute the characteristic
+ *     impedance mismatch loss.  If the component has a "loss" or "attenuation_dB_m"
+ *     field the attenuation is applied as α·length.
+ *   - "seriesRes" / "shortedRes": contributes resistive insertion loss.
+ *   - All other components: assumed lossless (0 dB contribution).
+ *
+ * @param {Array}    fixtureComponents - slice of userCircuit on the DUT side of the cal plane
+ * @param {number[]} frequencies       - frequencies in Hz
+ * @param {number}   zo                - reference impedance (Ω)
+ * @returns {number[]} one-way path attenuation in dB, parallel to frequencies array
+ */
+export function computeFixturePathAttenuation_dB(fixtureComponents, frequencies, zo) {
+  if (!fixtureComponents || fixtureComponents.length === 0 || !frequencies || frequencies.length === 0) {
+    return frequencies.map(() => 0);
+  }
+
+  return frequencies.map((f) => {
+    let total_dB = 0;
+    for (const comp of fixtureComponents) {
+      if (!comp || !comp.name) continue;
+
+      if (comp.name === "transmissionLine" || comp.name === "stub" || comp.name === "shortedStub") {
+        // Lossy TL: attenuation = loss_dB_per_m * length
+        const lengthM = parseFloat(comp.value) * (comp.unit === "mm" ? 1e-3 : comp.unit === "um" ? 1e-6 : 1);
+        const atten_dB_m = parseFloat(comp.attenuation_dB_m) || 0;
+        if (atten_dB_m > 0 && lengthM > 0) {
+          total_dB += atten_dB_m * lengthM;
+        }
+        // Mismatch loss from TL Zo ≠ zo is negligible for educational use; skip.
+      } else if (comp.name === "seriesRes" || comp.name === "shortedRes") {
+        // Series resistor: insertion loss ≈ R/(R + 2*zo) in power (rough approx for small R)
+        const R = parseFloat(comp.value) || 0;
+        if (R > 0) {
+          const transCoeff = (2 * zo) / (2 * zo + R); // voltage transmission
+          total_dB += -20 * Math.log10(Math.max(transCoeff, 1e-15));
+        }
+      }
+      // Other component types: assume lossless
+    }
+    return total_dB;
+  });
+}
 
 // ---------------------------------------------------------------------------
 // Residual error computation
@@ -134,15 +189,19 @@ export function uncertaintyAtPoint(gammaMag, f, zo, uncertaintySettings) {
 /**
  * Compute uncertainty bands (+/− on |S11| in dB) for every frequency point.
  *
- * @param {Object} sparamData - frequency-keyed s-param data (polar S11)
- * @param {number} zo - reference impedance
+ * @param {Object}    sparamData           - frequency-keyed s-param data (polar S11)
+ * @param {number}    zo                   - reference impedance
  * @param {{
  *   enabled: boolean,
  *   noiseFloor_dB: number,
  *   repeatability_dB: number,
+ *   pathAttenuation_dB: number,
  *   useIdeal: boolean,
  *   realisticParams: Object
  * }} uncertaintySettings
+ * @param {number[]|null} [perFreqAttenuation_dB] - optional per-frequency path attenuation
+ *   array (parallel to sorted freq keys).  When provided, overrides the scalar
+ *   `pathAttenuation_dB` from uncertaintySettings on a per-frequency basis.
  * @returns {{
  *   freqs: number[],
  *   s11_mag_dB: number[],
@@ -154,7 +213,7 @@ export function uncertaintyAtPoint(gammaMag, f, zo, uncertaintySettings) {
  *   dominantSource: string
  * }}
  */
-export function computeUncertaintyBands(sparamData, zo, uncertaintySettings) {
+export function computeUncertaintyBands(sparamData, zo, uncertaintySettings, perFreqAttenuation_dB = null) {
   if (!uncertaintySettings || !uncertaintySettings.enabled) {
     return { freqs: [], s11_mag_dB: [], upper_dB: [], lower_dB: [], delta_dB: [], maxUncertainty_dB: 0, maxUncertainty_f: 0, dominantSource: "none" };
   }
@@ -176,12 +235,19 @@ export function computeUncertaintyBands(sparamData, zo, uncertaintySettings) {
   let maxRepeat = 0;
   let maxPathAtten = 0;
 
-  for (const f of freqs) {
+  for (let fi = 0; fi < freqs.length; fi++) {
+    const f = freqs[fi];
     const point = sparamData[f];
     const gammaMag = point.S11.magnitude;
     const s11dB = 20 * Math.log10(Math.max(gammaMag, 1e-15));
 
-    const { deltaGamma, Ed, Es, Et, noise_G, repeat_G, pathAtten_G } = uncertaintyAtPoint(gammaMag, f, zo, uncertaintySettings);
+    // Per-frequency attenuation overrides the scalar when provided
+    const settingsForFreq =
+      perFreqAttenuation_dB && perFreqAttenuation_dB.length > fi
+        ? { ...uncertaintySettings, pathAttenuation_dB: perFreqAttenuation_dB[fi] }
+        : uncertaintySettings;
+
+    const { deltaGamma, Ed, Es, Et, noise_G, repeat_G, pathAtten_G } = uncertaintyAtPoint(gammaMag, f, zo, settingsForFreq);
 
     // Convert uncertainty to dB
     const upperMag = Math.min(gammaMag + deltaGamma, 1.0 - 1e-9);

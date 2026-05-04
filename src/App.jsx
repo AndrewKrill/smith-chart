@@ -43,7 +43,7 @@ import {
 import { applyPortExtension } from "./portExtension.js";
 import { applyDeembedding } from "./deembedding.js";
 import { frequencyToTimeDomain, applyGate, gatedToSParamFormat, computeTdrResolution } from "./tdr.js";
-import { computeUncertaintyBands } from "./uncertainty.js";
+import { computeUncertaintyBands, computeFixturePathAttenuation_dB } from "./uncertainty.js";
 import VnaTools from "./VnaTools.jsx";
 import VnaSmithChart from "./VnaSmithChart.jsx";
 
@@ -352,12 +352,24 @@ function App() {
     return frequencyToTimeDomain(effectiveSParamData, tdrSettings.mode, tdrSettings.window);
   }, [tdrSettings.enabled, tdrSettings.mode, tdrSettings.window, effectiveSParamData]);
 
+  // Per-frequency fixture path attenuation (auto-computed when cal plane is active).
+  // Uses components on the DUT side of the calibration plane (indices 0..planeDP-1).
+  const fixturePathAttenuation_dB = useMemo(() => {
+    if (!calSettings.enabled || calSettings.planeDP === null || calSettings.planeDP === undefined || calSettings.planeDP === 0) return null;
+    if (!effectiveSParamData) return null;
+    const fixtureComps = userCircuit.slice(0, calSettings.planeDP);
+    if (fixtureComps.length === 0) return null;
+    const freqs = Object.keys(effectiveSParamData).map(Number).sort((a, b) => a - b);
+    const zo = parseFloat(settings.zo) || 50;
+    return computeFixturePathAttenuation_dB(fixtureComps, freqs, zo);
+  }, [calSettings.enabled, calSettings.planeDP, userCircuit, effectiveSParamData, settings.zo]);
+
   // Uncertainty bands
   const uncertaintyBands = useMemo(() => {
     if (!uncertaintySettings.enabled || !effectiveSParamData) return null;
     const zo = parseFloat(settings.zo) || 50;
-    return computeUncertaintyBands(effectiveSParamData, zo, uncertaintySettings);
-  }, [uncertaintySettings, effectiveSParamData, settings.zo]);
+    return computeUncertaintyBands(effectiveSParamData, zo, uncertaintySettings, fixturePathAttenuation_dB);
+  }, [uncertaintySettings, effectiveSParamData, settings.zo, fixturePathAttenuation_dB]);
 
   // Port extension length in metres (used by Graph for arc overlay)
   const peLength_m = useMemo(() => {
@@ -620,6 +632,7 @@ function App() {
               uncertaintySettings={uncertaintySettings}
               setUncertaintySettings={setUncertaintySettings}
               uncertaintyBands={uncertaintyBands}
+              fixturePathAttenuation_dB={fixturePathAttenuation_dB}
               sparamData={effectiveSParamData}
               isSynthesized={!sParameters}
               circuitLength={userCircuit.length}
