@@ -284,10 +284,10 @@ export function frequencyToTimeDomain(sparamFreqData, mode = "bandpass", windowT
         return accI;
       });
       const stepMag = stepRe.map((r, i) => Math.sqrt(r * r + stepIm[i] * stepIm[i]));
-      return { timeAxis, realPart: stepRe, imagPart: stepIm, magnitude: stepMag, fStart, fStop, df, N: Nused };
+      return { timeAxis, realPart: stepRe, imagPart: stepIm, magnitude: stepMag, fStart, fStop, df, N: Nused, window: Array.from(win) };
     }
 
-    return { timeAxis, realPart, imagPart, magnitude, fStart, fStop, df, N: Nused };
+    return { timeAxis, realPart, imagPart, magnitude, fStart, fStop, df, N: Nused, window: Array.from(win) };
   }
 
   // Bandpass path: IFFT
@@ -299,7 +299,7 @@ export function frequencyToTimeDomain(sparamFreqData, mode = "bandpass", windowT
   const imagPart = Array.from(imArr);
   const magnitude = realPart.map((r, i) => Math.sqrt(r * r + imagPart[i] * imagPart[i]));
 
-  return { timeAxis, realPart, imagPart, magnitude, fStart, fStop, df, N: Nfft };
+  return { timeAxis, realPart, imagPart, magnitude, fStart, fStop, df, N: Nfft, window: Array.from(win) };
 }
 
 // ---------------------------------------------------------------------------
@@ -322,7 +322,7 @@ export function frequencyToTimeDomain(sparamFreqData, mode = "bandpass", windowT
  * }}
  */
 export function applyGate(tdData, tStart, tStop, gateShape = "nominal", gateNotch = false) {
-  const { timeAxis, realPart, imagPart, fStart, fStop, df, N } = tdData;
+  const { timeAxis, realPart, imagPart, fStart, fStop, df, N, window: specWin } = tdData;
   if (!timeAxis || timeAxis.length === 0) {
     return { gatedTdReal: [], gatedTdImag: [], gatedFdMag: [], gatedFdPhase: [], freqAxis: [] };
   }
@@ -330,12 +330,18 @@ export function applyGate(tdData, tStart, tStop, gateShape = "nominal", gateNotc
   const beta = gateShapeToKaiserBeta[gateShape] ?? 9;
   const dt = timeAxis[1] - timeAxis[0];
 
-  // Find gate index range
-  const i0 = Math.max(0, Math.round(tStart / dt));
-  const i1 = Math.min(N - 1, Math.round(tStop / dt));
-  const gateLen = i1 - i0 + 1;
-
-  const gateWin = gateLen > 1 ? kaiserWindow(gateLen, beta) : [1];
+  // Compute the full (unclamped) gate index range so that the Kaiser window is
+  // sized over the ENTIRE [tStart, tStop] span even when tStart < 0 or
+  // tStop > tMax.  Clamping only happens when we index into the time-domain
+  // arrays; the Kaiser window offset is preserved so that, for example, a gate
+  // of [-2 ns, +2 ns] centres its peak on t = 0 rather than at the start.
+  const i0_raw = Math.round(tStart / dt);
+  const i1_raw = Math.round(tStop / dt);
+  const i0 = Math.max(0, i0_raw);
+  const i1 = Math.min(N - 1, i1_raw);
+  const gateLen_full = i1_raw - i0_raw + 1;             // Kaiser window length (full span)
+  const kaiserOffset = i0 - i0_raw;                     // samples skipped from the left
+  const gateWin = gateLen_full > 1 ? kaiserWindow(gateLen_full, beta) : [1];
 
   // Apply gate window
   const gatedRe = new Float64Array(N);
@@ -344,7 +350,7 @@ export function applyGate(tdData, tStart, tStop, gateShape = "nominal", gateNotc
   if (!gateNotch) {
     // Passband: keep only the gate window, zero everything outside
     for (let i = i0; i <= i1; i++) {
-      const w = gateWin[i - i0];
+      const w = gateWin[i - i0 + kaiserOffset];
       gatedRe[i] = realPart[i] * w;
       gatedIm[i] = imagPart[i] * w;
     }
@@ -355,7 +361,7 @@ export function applyGate(tdData, tStart, tStop, gateShape = "nominal", gateNotc
       gatedIm[i] = imagPart[i];
     }
     for (let i = i0; i <= i1; i++) {
-      const w = gateWin[i - i0]; // Kaiser window: ~0 at edges → ~1 at center; (1-w) inverts for notch suppression
+      const w = gateWin[i - i0 + kaiserOffset]; // Kaiser window: ~0 at edges → ~1 at center; (1-w) inverts for notch suppression
       gatedRe[i] = realPart[i] * (1 - w);
       gatedIm[i] = imagPart[i] * (1 - w);
     }
@@ -382,9 +388,13 @@ export function applyGate(tdData, tStart, tStop, gateShape = "nominal", gateNotc
   for (let k = 0; k < nOut; k++) {
     const fk = fStart + k * df;
     freqAxis.push(fk);
-    // The IFFT already divided by N; the forward FFT does not, so no extra
-    // /N is needed here.
-    const mag = Math.sqrt(fftRe[k] * fftRe[k] + fftIm[k] * fftIm[k]);
+    // The round-trip IFFT→gate→FFT introduces a per-frequency factor of specWin[k]
+    // (the spectral window applied before the IFFT).  Dividing by specWin[k] recovers
+    // the true S11[k].  We floor at 1e-6 to avoid divide-by-zero for windows (e.g.
+    // Hanning) whose edge bins are zero; those bins were already zeroed in the IFFT
+    // and remain near-zero after correction.
+    const sw = Math.max(specWin ? (specWin[k] ?? 1) : 1, 1e-6);
+    const mag = Math.sqrt(fftRe[k] * fftRe[k] + fftIm[k] * fftIm[k]) / sw;
     const phase = (Math.atan2(fftIm[k], fftRe[k]) * 180) / Math.PI;
     gatedFdMag.push(mag);
     gatedFdPhase.push(phase);
