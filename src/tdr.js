@@ -314,13 +314,14 @@ export function frequencyToTimeDomain(sparamFreqData, mode = "bandpass", windowT
  * @param {number} tStart - gate start in seconds
  * @param {number} tStop - gate stop in seconds
  * @param {"minimum"|"nominal"|"wide"|"maximum"} gateShape
+ * @param {boolean} [gateNotch=false] - when true, notch (reject) the gate window instead of passing it
  * @returns {{
  *   gatedTdReal: number[], gatedTdImag: number[],
  *   gatedFdMag: number[], gatedFdPhase: number[],
  *   freqAxis: number[]
  * }}
  */
-export function applyGate(tdData, tStart, tStop, gateShape = "nominal") {
+export function applyGate(tdData, tStart, tStop, gateShape = "nominal", gateNotch = false) {
   const { timeAxis, realPart, imagPart, fStart, fStop, df, N } = tdData;
   if (!timeAxis || timeAxis.length === 0) {
     return { gatedTdReal: [], gatedTdImag: [], gatedFdMag: [], gatedFdPhase: [], freqAxis: [] };
@@ -339,10 +340,25 @@ export function applyGate(tdData, tStart, tStop, gateShape = "nominal") {
   // Apply gate window
   const gatedRe = new Float64Array(N);
   const gatedIm = new Float64Array(N);
-  for (let i = i0; i <= i1; i++) {
-    const w = gateWin[i - i0];
-    gatedRe[i] = realPart[i] * w;
-    gatedIm[i] = imagPart[i] * w;
+
+  if (!gateNotch) {
+    // Passband: keep only the gate window, zero everything outside
+    for (let i = i0; i <= i1; i++) {
+      const w = gateWin[i - i0];
+      gatedRe[i] = realPart[i] * w;
+      gatedIm[i] = imagPart[i] * w;
+    }
+  } else {
+    // Notch: pass everything outside, suppress inside with Kaiser-weighted attenuation
+    for (let i = 0; i < N; i++) {
+      gatedRe[i] = realPart[i];
+      gatedIm[i] = imagPart[i];
+    }
+    for (let i = i0; i <= i1; i++) {
+      const w = gateWin[i - i0]; // Kaiser window: ~0 at edges → ~1 at center; (1-w) inverts for notch suppression
+      gatedRe[i] = realPart[i] * (1 - w);
+      gatedIm[i] = imagPart[i] * (1 - w);
+    }
   }
 
   // FFT gated time-domain data back to frequency domain
@@ -401,6 +417,61 @@ export function gateStartStopToCS(tStart, tStop) {
  */
 export function gateCsToStartStop(center, span) {
   return { tStart: center - span / 2, tStop: center + span / 2 };
+}
+
+// ---------------------------------------------------------------------------
+// Convert gated result back to standard S-param keyed format
+// ---------------------------------------------------------------------------
+
+/**
+ * Map the array-based output of applyGate back to the standard frequency-keyed
+ * S-param format { "Hz": { S11: { magnitude, angle } } } so that it can be
+ * fed back into the VNA correction pipeline.
+ *
+ * The gated FFT output (freqAxis) may not align exactly with the original
+ * frequency keys.  This function nearest-neighbour interpolates to the
+ * original keys (all keys are normally already aligned, but guards against
+ * floating-point drift).
+ *
+ * @param {{ freqAxis:number[], gatedFdMag:number[], gatedFdPhase:number[] }} gatedResult
+ * @param {Object} originalSParamData - original frequency-keyed s-param object used as key template
+ * @returns {Object} frequency-keyed S-param data in standard format
+ */
+export function gatedToSParamFormat(gatedResult, originalSParamData) {
+  const { freqAxis, gatedFdMag, gatedFdPhase } = gatedResult;
+  if (!freqAxis || freqAxis.length === 0) return originalSParamData;
+
+  // Build a lookup from the gated result arrays
+  const n = freqAxis.length;
+
+  const result = {};
+  const origFreqs = Object.keys(originalSParamData).map(Number).sort((a, b) => a - b);
+
+  for (const fStr of Object.keys(originalSParamData)) {
+    const f = Number(fStr);
+
+    // Find nearest index in gated freqAxis
+    let lo = 0;
+    let hi = n - 1;
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1;
+      if (freqAxis[mid] < f) lo = mid + 1;
+      else hi = mid;
+    }
+    // lo is the first index where freqAxis[lo] >= f
+    let idx = lo;
+    if (idx > 0 && Math.abs(freqAxis[idx - 1] - f) < Math.abs(freqAxis[idx] - f)) idx = idx - 1;
+
+    if (idx >= n) idx = n - 1;
+
+    const mag = gatedFdMag[idx] ?? 0;
+    const angle = gatedFdPhase[idx] ?? 0;
+
+    // Preserve all original fields (S21, etc.) and override S11
+    result[fStr] = { ...originalSParamData[fStr], S11: { magnitude: mag, angle } };
+  }
+
+  return result;
 }
 
 // ---------------------------------------------------------------------------

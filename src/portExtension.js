@@ -13,19 +13,21 @@ import { speedOfLight, polarToRectangular, rectangularToPolar } from "./commonFu
 
 /**
  * Apply port extension to a single S11 rectangular value.
- * Phase rotation: Γ_extended = Γ · e^{−2jβℓ}
+ * De-embeds a transmission line of electrical length ℓ by rotating the
+ * reflection coefficient forward: Γ_extended = Γ · e^{+2jβℓ}.
+ * This recovers Γ_L from the measured Γ_in = Γ_L · e^{−2jβℓ}.
  *
  * @param {{real:number,imaginary:number}} s11rect - S11 in rectangular form
  * @param {number} f - frequency in Hz
  * @param {number} length - extension length in metres
  * @param {number} eeff - effective dielectric constant (default 1)
- * @returns {{real:number,imaginary:number}} extended S11
+ * @returns {{real:number,imaginary:number}} de-embedded S11
  */
 export function applyPortExtensionSingle(s11rect, f, length, eeff = 1) {
   const beta = (2 * Math.PI * f * Math.sqrt(eeff)) / speedOfLight;
   const theta = 2 * beta * length; // two-way phase shift
-  const cos_t = Math.cos(-theta);
-  const sin_t = Math.sin(-theta);
+  const cos_t = Math.cos(theta);  // corrected: e^{+j2βl} de-embeds the reference plane
+  const sin_t = Math.sin(theta);
   return {
     real: s11rect.real * cos_t - s11rect.imaginary * sin_t,
     imaginary: s11rect.real * sin_t + s11rect.imaginary * cos_t,

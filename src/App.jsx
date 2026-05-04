@@ -42,8 +42,8 @@ import {
 } from "./calibration.js";
 import { applyPortExtension } from "./portExtension.js";
 import { applyDeembedding } from "./deembedding.js";
-import { frequencyToTimeDomain, applyGate, computeTdrResolution } from "./tdr.js";
-import { computeUncertaintyBands } from "./uncertainty.js";
+import { frequencyToTimeDomain, applyGate, gatedToSParamFormat, computeTdrResolution } from "./tdr.js";
+import { computeUncertaintyBands, computeFixturePathAttenuation_dB } from "./uncertainty.js";
 import VnaTools from "./VnaTools.jsx";
 import VnaSmithChart from "./VnaSmithChart.jsx";
 
@@ -98,6 +98,7 @@ const initialTdrSettings = {
   gateStart: 0,
   gateStop: 1e-9,
   gateShape: "nominal",
+  gateNotch: false,
   velocityFactor: 1,
   synthPoints: 201,
   synthFmin: null,
@@ -194,9 +195,6 @@ function App() {
     return newCircuit;
   }, [userCircuit, afterPeData, rawSParamData]);
 
-  const [processedImpedanceResults, spanResults, multiZResults, gainArray, noiseArray, numericalFrequency, RefIn, noiseFrequency] =
-    allImpedanceCalculations(correctedUserCircuit, settingsFloat, showIdeal);
-
   //check if esr or esl exists, and if it does exist check that it is not 0 or ''
   const nonIdealUsed = userCircuit.findIndex((c) => (c.esr != null && c.esr != 0 && c.esr !== "") || (c.esl != null && c.esl != 0 && c.esl !== ""));
 
@@ -204,11 +202,6 @@ function App() {
   const correctedSParamIndex = correctedUserCircuit.findIndex((c) => c.name === "sparam");
   const sParameters = sParamIndex === -1 ? null : correctedUserCircuit[correctedSParamIndex];
   const s1pIndex = userCircuit.findIndex((c) => c.type === "s1p");
-  const chosenSparameter =
-    sParamIndex === -1
-      ? null
-      : { ...correctedUserCircuit[correctedSParamIndex].data[numericalFrequency], zo: correctedUserCircuit[correctedSParamIndex].settings.zo };
-  const chosenNoiseParameter = noiseFrequency === -1 ? null : userCircuit[sParamIndex].noise[noiseFrequency];
 
   // Synthesize S11 from the component circuit when no S-param file is loaded
   const synthesizedSParamData = useMemo(() => {
@@ -359,12 +352,24 @@ function App() {
     return frequencyToTimeDomain(effectiveSParamData, tdrSettings.mode, tdrSettings.window);
   }, [tdrSettings.enabled, tdrSettings.mode, tdrSettings.window, effectiveSParamData]);
 
+  // Per-frequency fixture path attenuation (auto-computed when cal plane is active).
+  // Uses components on the DUT side of the calibration plane (indices 0..planeDP-1).
+  const fixturePathAttenuation_dB = useMemo(() => {
+    if (!calSettings.enabled || calSettings.planeDP == null || calSettings.planeDP === 0) return null;
+    if (!effectiveSParamData) return null;
+    const fixtureComps = userCircuit.slice(0, calSettings.planeDP);
+    if (fixtureComps.length === 0) return null;
+    const freqs = Object.keys(effectiveSParamData).map(Number).sort((a, b) => a - b);
+    const zo = parseFloat(settings.zo) || 50;
+    return computeFixturePathAttenuation_dB(fixtureComps, freqs, zo);
+  }, [calSettings.enabled, calSettings.planeDP, userCircuit, effectiveSParamData, settings.zo]);
+
   // Uncertainty bands
   const uncertaintyBands = useMemo(() => {
     if (!uncertaintySettings.enabled || !effectiveSParamData) return null;
     const zo = parseFloat(settings.zo) || 50;
-    return computeUncertaintyBands(effectiveSParamData, zo, uncertaintySettings);
-  }, [uncertaintySettings, effectiveSParamData, settings.zo]);
+    return computeUncertaintyBands(effectiveSParamData, zo, uncertaintySettings, fixturePathAttenuation_dB);
+  }, [uncertaintySettings, effectiveSParamData, settings.zo, fixturePathAttenuation_dB]);
 
   // Port extension length in metres (used by Graph for arc overlay)
   const peLength_m = useMemo(() => {
@@ -376,11 +381,42 @@ function App() {
   const gatedSParamData = useMemo(() => {
     if (!tdrSettings.enabled || !tdrSettings.gateEnabled || !tdrData) return null;
     try {
-      return applyGate(tdrData, tdrSettings.gateStart, tdrSettings.gateStop, tdrSettings.gateShape);
+      return applyGate(tdrData, tdrSettings.gateStart, tdrSettings.gateStop, tdrSettings.gateShape, tdrSettings.gateNotch);
     } catch {
       return null;
     }
   }, [tdrSettings, tdrData]);
+
+  // Convert the gated result to standard S-param keyed format so it can flow
+  // through the main correction pipeline (allImpedanceCalculations).
+  const afterGatingData = useMemo(() => {
+    if (!tdrSettings.enabled || !tdrSettings.gateEnabled || !gatedSParamData) return null;
+    const baseData = afterPeData ?? rawSParamData;
+    if (!baseData) return null;
+    return gatedToSParamFormat(gatedSParamData, baseData);
+  }, [tdrSettings.enabled, tdrSettings.gateEnabled, gatedSParamData, afterPeData, rawSParamData]);
+
+  // Final pipeline circuit: bake in afterGatingData when gating is active, otherwise
+  // falls back to correctedUserCircuit (which already has afterPeData).
+  // NOTE: correctedUserCircuit intentionally uses afterPeData (not gated) so that
+  // effectiveSParamData and tdrData are computed on pre-gating data, avoiding a cycle.
+  const finalUserCircuit = useMemo(() => {
+    if (!afterGatingData) return correctedUserCircuit;
+    const sParamIdx = userCircuit.findIndex((c) => c.name === "sparam");
+    if (sParamIdx === -1) return correctedUserCircuit;
+    const newCircuit = [...correctedUserCircuit];
+    newCircuit[sParamIdx] = { ...correctedUserCircuit[sParamIdx], data: afterGatingData };
+    return newCircuit;
+  }, [correctedUserCircuit, afterGatingData, userCircuit]);
+
+  const [processedImpedanceResults, spanResults, multiZResults, gainArray, noiseArray, numericalFrequency, RefIn, noiseFrequency] =
+    allImpedanceCalculations(finalUserCircuit, settingsFloat, showIdeal);
+
+  const chosenSparameter =
+    sParamIndex === -1
+      ? null
+      : { ...correctedUserCircuit[correctedSParamIndex].data[numericalFrequency], zo: correctedUserCircuit[correctedSParamIndex].settings.zo };
+  const chosenNoiseParameter = noiseFrequency === -1 ? null : userCircuit[sParamIndex].noise[noiseFrequency];
 
   // ---------------------------------------------------------------------------
   // Split-chart helpers
@@ -566,6 +602,9 @@ function App() {
                   RefIn={RefIn}
                   zo={settingsFloat.zo}
                   uncertaintyBands={uncertaintyBands}
+                  intermediateTraces={intermediateTraces}
+                  activeStages={activeStages}
+                  sParamZo={sParamZo}
                 />
               </CardContent>
             </Card>
@@ -596,6 +635,7 @@ function App() {
               uncertaintySettings={uncertaintySettings}
               setUncertaintySettings={setUncertaintySettings}
               uncertaintyBands={uncertaintyBands}
+              fixturePathAttenuation_dB={fixturePathAttenuation_dB}
               sparamData={effectiveSParamData}
               isSynthesized={!sParameters}
               circuitLength={userCircuit.length}

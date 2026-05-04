@@ -453,8 +453,8 @@ function TdrTab({ tdrSettings, setTdrSettings, sparamData, isSynthesized, zo }) 
   // Gated data
   const gatedData = useMemo(() => {
     if (!tdData || !ts.gateEnabled) return null;
-    return applyGate(tdData, ts.gateStart || 0, ts.gateStop || 1e-9, ts.gateShape);
-  }, [tdData, ts.gateEnabled, ts.gateStart, ts.gateStop, ts.gateShape]);
+    return applyGate(tdData, ts.gateStart || 0, ts.gateStop || 1e-9, ts.gateShape, ts.gateNotch);
+  }, [tdData, ts.gateEnabled, ts.gateStart, ts.gateStop, ts.gateShape, ts.gateNotch]);
 
   // Chart resize
   useEffect(() => {
@@ -724,6 +724,16 @@ function TdrTab({ tdrSettings, setTdrSettings, sparamData, isSynthesized, zo }) 
                 </FieldCell>
               </Row>
 
+              <Row>
+                <LabelCell>{t("vna.tdr.gateMode")}</LabelCell>
+                <FieldCell>
+                  <ToggleButtonGroup value={ts.gateNotch ? "notch" : "passband"} exclusive onChange={(_, v) => v && set("gateNotch", v === "notch")} size="small">
+                    <ToggleButton value="passband">{t("vna.tdr.gatePassband")}</ToggleButton>
+                    <ToggleButton value="notch">{t("vna.tdr.gateNotch")}</ToggleButton>
+                  </ToggleButtonGroup>
+                </FieldCell>
+              </Row>
+
               <Alert severity="info" sx={{ mt: 1 }}>
                 {t("vna.tdr.gateHint")}
               </Alert>
@@ -738,7 +748,7 @@ function TdrTab({ tdrSettings, setTdrSettings, sparamData, isSynthesized, zo }) 
 // ---------------------------------------------------------------------------
 // Tab 5: Noise Floor & Uncertainty
 // ---------------------------------------------------------------------------
-function UncertaintyTab({ uncertaintySettings, setUncertaintySettings, uncertaintyBands, centerFrequency }) {
+function UncertaintyTab({ uncertaintySettings, setUncertaintySettings, uncertaintyBands, fixturePathAttenuation_dB, centerFrequency }) {
   const { t } = useTranslation();
   const us = uncertaintySettings;
   const set = (key, val) => setUncertaintySettings((s) => ({ ...s, [key]: val }));
@@ -751,6 +761,15 @@ function UncertaintyTab({ uncertaintySettings, setUncertaintySettings, uncertain
         const f_GHz = (maxUncertainty_f / HZ_TO_GHZ).toFixed(3);
         const unc_dB = maxUncertainty_dB.toFixed(2);
         return t("vna.unc.maxUnc", { v: unc_dB, f: f_GHz, unit: "GHz", src: dominantSource });
+      })()
+    : null;
+
+  // Auto-computed fixture attenuation summary (median of per-frequency array)
+  const autoPathAtten = fixturePathAttenuation_dB && fixturePathAttenuation_dB.length > 0
+    ? (() => {
+        const sorted = [...fixturePathAttenuation_dB].sort((a, b) => a - b);
+        const mid = Math.floor(sorted.length / 2);
+        return sorted[mid];
       })()
     : null;
 
@@ -803,11 +822,23 @@ function UncertaintyTab({ uncertaintySettings, setUncertaintySettings, uncertain
               label={t("vna.unc.pathAttenuation")}
               value={us.pathAttenuation_dB}
               onChange={(e) => set("pathAttenuation_dB", parseInput(e.target.value))}
+              disabled={autoPathAtten !== null}
               slotProps={{ input: { endAdornment: <InputAdornment position="end">dB</InputAdornment> } }}
               sx={{ width: 150 }}
             />
+            {autoPathAtten !== null && (
+              <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, ml: 1 }}>
+                <Chip size="small" color="info" label={t("vna.unc.autoPathAtten", { v: autoPathAtten.toFixed(2) })} />
+              </Box>
+            )}
           </FieldCell>
         </Row>
+
+        {autoPathAtten !== null && (
+          <Alert severity="info" sx={{ mt: 1 }}>
+            {t("vna.unc.autoPathAttenDesc")}
+          </Alert>
+        )}
 
         <Alert severity="info" sx={{ mt: 1 }}>
           {t("vna.unc.desc")}
@@ -843,6 +874,7 @@ export default function VnaTools({
   uncertaintySettings,
   setUncertaintySettings,
   uncertaintyBands,
+  fixturePathAttenuation_dB,
   sparamData,
   isSynthesized,
   circuitLength,
@@ -947,7 +979,7 @@ export default function VnaTools({
         {tab === 3 && (
           <TdrTab tdrSettings={tdrSettings} setTdrSettings={setTdrSettings} sparamData={sparamData} isSynthesized={isSynthesized} zo={zo} />
         )}
-        {tab === 4 && <UncertaintyTab uncertaintySettings={uncertaintySettings} setUncertaintySettings={setUncertaintySettings} uncertaintyBands={uncertaintyBands} centerFrequency={centerFrequency} />}
+        {tab === 4 && <UncertaintyTab uncertaintySettings={uncertaintySettings} setUncertaintySettings={setUncertaintySettings} uncertaintyBands={uncertaintyBands} fixturePathAttenuation_dB={fixturePathAttenuation_dB} centerFrequency={centerFrequency} />}
       </AccordionDetails>
     </Accordion>
   );
