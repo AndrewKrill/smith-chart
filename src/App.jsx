@@ -114,7 +114,7 @@ const initialUncertaintySettings = {
   realisticParams: {},
 };
 
-const initialCircuit = [{ name: "blackBox", ...circuitComponents.blackBox.default }];
+const DISPLAY_SYNTH_POINTS = 201;
 
 const params = new URLSearchParams(window.location.search);
 var [stateInURL, defaultCircuit, urlContainsState] = updateObjectFromUrl(initialState, initialCircuit, params);
@@ -223,8 +223,8 @@ function App() {
     }
 
     const frequencies = [];
-    for (let i = 0; i < 201; i++) {
-      frequencies.push(fMin + (i * (fMax - fMin)) / 200);
+    for (let i = 0; i < DISPLAY_SYNTH_POINTS; i++) {
+      frequencies.push(fMin + (i * (fMax - fMin)) / (DISPLAY_SYNTH_POINTS - 1));
     }
     return synthesizeS11FromCircuit(userCircuit, frequencies, sf.zo);
   }, [userCircuit, settings]);
@@ -251,6 +251,7 @@ function App() {
       fMin = Math.max(centerF - fSpanHz, 1);
       fMax = centerF + fSpanHz;
     } else {
+      // Default: ±50 % of centre frequency
       fMin = centerF * 0.5;
       fMax = centerF * 1.5;
     }
