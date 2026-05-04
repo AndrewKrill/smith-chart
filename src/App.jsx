@@ -116,6 +116,8 @@ const initialUncertaintySettings = {
 
 const DISPLAY_SYNTH_POINTS = 201;
 
+const initialCircuit = [{ name: "blackBox", ...circuitComponents.blackBox.default }];
+
 const params = new URLSearchParams(window.location.search);
 var [stateInURL, defaultCircuit, urlContainsState] = updateObjectFromUrl(initialState, initialCircuit, params);
 console.log("stateInURL", stateInURL, defaultCircuit, urlContainsState);
