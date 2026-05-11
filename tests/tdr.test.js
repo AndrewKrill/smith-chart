@@ -48,6 +48,15 @@ function nearestIndex(arr, value) {
   return idx;
 }
 
+describe("helper nearestIndex", () => {
+  test("returns exact and nearest indices", () => {
+    const arr = [1, 3, 7, 10];
+    expect(nearestIndex(arr, 7)).toBe(2);
+    expect(nearestIndex(arr, 8)).toBe(2);
+    expect(nearestIndex(arr, 9.9)).toBe(3);
+  });
+});
+
 describe("Window functions", () => {
   test("rectangular window all ones", () => {
     const w = buildWindow(32, "rectangular");

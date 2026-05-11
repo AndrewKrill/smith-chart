@@ -19,7 +19,7 @@
 
 import { speedOfLight, polarToRectangular, rectangularToPolar } from "./commonFunctions.js";
 
-const MIN_SPECTRAL_WINDOW_WEIGHT = 1e-9;
+const SPECTRAL_WINDOW_FLOOR = 1e-9;
 
 // ---------------------------------------------------------------------------
 // Window functions
@@ -518,7 +518,7 @@ export function applyGate(tdData, tStart, tStop, gateShape = "normal", gateType 
   for (let k = 0; k < measuredCount; k++) {
     const defaultFrequency = fStart + k * df;
     const fk = originalFreqs[k] ?? defaultFrequency;
-    const sw = Math.max(specWin ? (specWin[k] ?? 1) : 1, MIN_SPECTRAL_WINDOW_WEIGHT);
+    const sw = Math.max(specWin ? (specWin[k] ?? 1) : 1, SPECTRAL_WINDOW_FLOOR);
     const re = fftRe[k] / sw;
     const im = fftIm[k] / sw;
     const polar = rectangularToPolar({ real: re, imaginary: im });
