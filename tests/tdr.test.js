@@ -24,10 +24,10 @@ function buildTwoReflectionSParam(fStart, fStop, nPoints, a1, t1, a2, t2) {
   const data = {};
   for (let i = 0; i < nPoints; i++) {
     const f = fStart + (i / (nPoints - 1)) * (fStop - fStart);
-    const w1 = -2 * Math.PI * f * t1;
-    const w2 = -2 * Math.PI * f * t2;
-    const re = a1 * Math.cos(w1) + a2 * Math.cos(w2);
-    const im = a1 * Math.sin(w1) + a2 * Math.sin(w2);
+    const phase1 = -2 * Math.PI * f * t1;
+    const phase2 = -2 * Math.PI * f * t2;
+    const re = a1 * Math.cos(phase1) + a2 * Math.cos(phase2);
+    const im = a1 * Math.sin(phase1) + a2 * Math.sin(phase2);
     const mag = Math.sqrt(re * re + im * im);
     const ang = Math.atan2(im, re) * 180 / Math.PI;
     data[f.toString()] = { S11: { magnitude: mag, angle: ang } };
@@ -142,18 +142,18 @@ describe("applyGate correctness", () => {
     const fStart = 1e9;
     const fStop = 11e9;
     const points = 201;
-    const t1 = 0.7e-9;
-    const t2 = 2.0e-9;
-    const spData = buildTwoReflectionSParam(fStart, fStop, points, 0.7, t1, 0.35, t2);
+    const delay1 = 0.7e-9;
+    const delay2 = 2.0e-9;
+    const spData = buildTwoReflectionSParam(fStart, fStop, points, 0.7, delay1, 0.35, delay2);
     const td = frequencyToTimeDomain(spData, "bandpass", "rectangular");
 
-    const gated = applyGate(td, t1 - 0.4e-9, t1 + 0.4e-9, "minimum", "bandpass");
+    const gated = applyGate(td, delay1 - 0.4e-9, delay1 + 0.4e-9, "minimum", "bandpass");
     expect(gated.valid).toBe(true);
     const gatedS = gatedToSParamFormat(gated, spData);
     const tdG = frequencyToTimeDomain(gatedS, "bandpass", "rectangular");
 
-    const i1 = nearestIndex(tdG.timeAxis, t1);
-    const i2 = nearestIndex(tdG.timeAxis, t2);
+    const i1 = nearestIndex(tdG.timeAxis, delay1);
+    const i2 = nearestIndex(tdG.timeAxis, delay2);
     expect(tdG.magnitude[i1]).toBeGreaterThan(tdG.magnitude[i2] * 1.8);
   });
 
@@ -161,18 +161,18 @@ describe("applyGate correctness", () => {
     const fStart = 1e9;
     const fStop = 11e9;
     const points = 201;
-    const t1 = 0.7e-9;
-    const t2 = 2.0e-9;
-    const spData = buildTwoReflectionSParam(fStart, fStop, points, 0.7, t1, 0.35, t2);
+    const delay1 = 0.7e-9;
+    const delay2 = 2.0e-9;
+    const spData = buildTwoReflectionSParam(fStart, fStop, points, 0.7, delay1, 0.35, delay2);
     const td = frequencyToTimeDomain(spData, "bandpass", "rectangular");
 
-    const gated = applyGate(td, t1 - 0.4e-9, t1 + 0.4e-9, "minimum", "notch");
+    const gated = applyGate(td, delay1 - 0.4e-9, delay1 + 0.4e-9, "minimum", "notch");
     expect(gated.valid).toBe(true);
     const gatedS = gatedToSParamFormat(gated, spData);
     const tdG = frequencyToTimeDomain(gatedS, "bandpass", "rectangular");
 
-    const i1 = nearestIndex(tdG.timeAxis, t1);
-    const i2 = nearestIndex(tdG.timeAxis, t2);
+    const i1 = nearestIndex(tdG.timeAxis, delay1);
+    const i2 = nearestIndex(tdG.timeAxis, delay2);
     expect(tdG.magnitude[i1]).toBeLessThan(tdG.magnitude[i2]);
   });
 });

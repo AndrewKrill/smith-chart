@@ -341,8 +341,8 @@
       "gate_normal": "標準",
       "gateType": "Gate type",
       "gateBandpass": "Bandpass",
-      "windowGateSeparation": "Transform window is separate from VNA gate shape selection.",
-      "apparentImpedanceWarning": "Bandpass/impulse modes show magnitude-only apparent impedance; use LP Step for signed TDR impedance."
+      "windowGateSeparation": "変換ウィンドウは、VNA 風ゲート形状の選択とは独立しています。",
+      "apparentImpedanceWarning": "bandpass/impulse モードのインピーダンスは振幅のみの見かけ値です。符号付き TDR インピーダンスには LP Step を使用してください。"
     },
     "unc": {
       "enabled": "不確かさを有効化",

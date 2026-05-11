@@ -297,7 +297,7 @@ export function frequencyToTimeDomain(sparamFreqData, mode = "bandpass", windowT
     }
 
     // Low-pass modes: enforce conjugate symmetry so IFFT → real signal.
-    // Approximate DC from the first harmonic sample real component.
+    // Use the first harmonic sample real component as the DC estimate.
     const s0r = polarToRectangular(sparamFreqData[freqs[0]].S11);
     const dcRe = s0r.real;
     const dcIm = 0; // DC must be real for a real signal
@@ -516,7 +516,8 @@ export function applyGate(tdData, tStart, tStop, gateShape = "normal", gateType 
   const gatedFdPhase = [];
   const gatedS11 = [];
   for (let k = 0; k < measuredCount; k++) {
-    const fk = originalFreqs[k] ?? (fStart + k * df);
+    const defaultFrequency = fStart + k * df;
+    const fk = originalFreqs[k] ?? defaultFrequency;
     const sw = Math.max(specWin ? (specWin[k] ?? 1) : 1, MIN_SPECTRAL_WINDOW_WEIGHT);
     const re = fftRe[k] / sw;
     const im = fftIm[k] / sw;

@@ -341,8 +341,8 @@
       "gate_normal": "Normal",
       "gateType": "Gate type",
       "gateBandpass": "Bandpass",
-      "windowGateSeparation": "Transform window is separate from VNA gate shape selection.",
-      "apparentImpedanceWarning": "Bandpass/impulse modes show magnitude-only apparent impedance; use LP Step for signed TDR impedance."
+      "windowGateSeparation": "Dönüşüm penceresi, VNA benzeri geçit şekli seçiminden ayrıdır.",
+      "apparentImpedanceWarning": "Bandpass/impulse modları yalnızca genlik tabanlı görünür empedans gösterir; işaretli TDR empedansı için LP Step kullanın."
     },
     "unc": {
       "enabled": "Belirsizlik etkin",
