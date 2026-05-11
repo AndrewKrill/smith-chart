@@ -20,7 +20,7 @@ function buildSyntheticSparam(fStart, fStop, nPoints, gammaFn) {
   return data;
 }
 
-function buildTwoReflectionSparam(fStart, fStop, nPoints, a1, t1, a2, t2) {
+function buildTwoReflectionSParam(fStart, fStop, nPoints, a1, t1, a2, t2) {
   const data = {};
   for (let i = 0; i < nPoints; i++) {
     const f = fStart + (i / (nPoints - 1)) * (fStop - fStart);
@@ -144,7 +144,7 @@ describe("applyGate correctness", () => {
     const points = 201;
     const t1 = 0.7e-9;
     const t2 = 2.0e-9;
-    const spData = buildTwoReflectionSparam(fStart, fStop, points, 0.7, t1, 0.35, t2);
+    const spData = buildTwoReflectionSParam(fStart, fStop, points, 0.7, t1, 0.35, t2);
     const td = frequencyToTimeDomain(spData, "bandpass", "rectangular");
 
     const gated = applyGate(td, t1 - 0.4e-9, t1 + 0.4e-9, "minimum", "bandpass");
@@ -163,7 +163,7 @@ describe("applyGate correctness", () => {
     const points = 201;
     const t1 = 0.7e-9;
     const t2 = 2.0e-9;
-    const spData = buildTwoReflectionSparam(fStart, fStop, points, 0.7, t1, 0.35, t2);
+    const spData = buildTwoReflectionSParam(fStart, fStop, points, 0.7, t1, 0.35, t2);
     const td = frequencyToTimeDomain(spData, "bandpass", "rectangular");
 
     const gated = applyGate(td, t1 - 0.4e-9, t1 + 0.4e-9, "minimum", "notch");

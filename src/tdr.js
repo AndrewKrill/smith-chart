@@ -19,6 +19,8 @@
 
 import { speedOfLight, polarToRectangular, rectangularToPolar } from "./commonFunctions.js";
 
+const MIN_SPECTRAL_WINDOW_WEIGHT = 1e-9;
+
 // ---------------------------------------------------------------------------
 // Window functions
 // ---------------------------------------------------------------------------
@@ -515,7 +517,7 @@ export function applyGate(tdData, tStart, tStop, gateShape = "normal", gateType 
   const gatedS11 = [];
   for (let k = 0; k < measuredCount; k++) {
     const fk = originalFreqs[k] ?? (fStart + k * df);
-    const sw = Math.max(specWin ? (specWin[k] ?? 1) : 1, 1e-9);
+    const sw = Math.max(specWin ? (specWin[k] ?? 1) : 1, MIN_SPECTRAL_WINDOW_WEIGHT);
     const re = fftRe[k] / sw;
     const im = fftIm[k] / sw;
     const polar = rectangularToPolar({ real: re, imaginary: im });
@@ -611,8 +613,7 @@ export function gatedToSParamFormat(gatedResult, originalSParamData) {
       if (gatedS11[bestIdx]?.S11) {
         s11 = gatedS11[bestIdx].S11;
       } else {
-        const rect = polarToRectangular({ magnitude: gatedFdMag[bestIdx] ?? 0, angle: gatedFdPhase[bestIdx] ?? 0 });
-        s11 = rectangularToPolar(rect);
+        s11 = { magnitude: gatedFdMag[bestIdx] ?? 0, angle: gatedFdPhase[bestIdx] ?? 0 };
       }
     }
     const mag = s11?.magnitude ?? 0;
