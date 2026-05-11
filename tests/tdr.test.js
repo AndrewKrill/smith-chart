@@ -109,6 +109,7 @@ describe("applyGate correctness", () => {
     expect(gated.gatedS11.length).toBe(points);
     for (let i = 0; i < gated.gatedS11.length; i++) {
       expect(gated.gatedS11[i].S11.magnitude).toBeCloseTo(0.5, 3);
+      expect(gated.gatedS11[i].S11.angle).toBeCloseTo(0, 3);
     }
   });
 

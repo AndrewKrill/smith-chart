@@ -295,7 +295,7 @@ export function frequencyToTimeDomain(sparamFreqData, mode = "bandpass", windowT
     }
 
     // Low-pass modes: enforce conjugate symmetry so IFFT → real signal.
-    // Synthesize DC value from first harmonic sample.
+    // Approximate DC from the first harmonic sample real component.
     const s0r = polarToRectangular(sparamFreqData[freqs[0]].S11);
     const dcRe = s0r.real;
     const dcIm = 0; // DC must be real for a real signal
@@ -608,9 +608,12 @@ export function gatedToSParamFormat(gatedResult, originalSParamData) {
           bestIdx = i;
         }
       }
-      const re = gatedS11[bestIdx]?.S11?.real ?? polarToRectangular({ magnitude: gatedFdMag[bestIdx] ?? 0, angle: gatedFdPhase[bestIdx] ?? 0 }).real;
-      const im = gatedS11[bestIdx]?.S11?.imaginary ?? polarToRectangular({ magnitude: gatedFdMag[bestIdx] ?? 0, angle: gatedFdPhase[bestIdx] ?? 0 }).imaginary;
-      s11 = rectangularToPolar({ real: re, imaginary: im });
+      if (gatedS11[bestIdx]?.S11) {
+        s11 = gatedS11[bestIdx].S11;
+      } else {
+        const rect = polarToRectangular({ magnitude: gatedFdMag[bestIdx] ?? 0, angle: gatedFdPhase[bestIdx] ?? 0 });
+        s11 = rectangularToPolar(rect);
+      }
     }
     const mag = s11?.magnitude ?? 0;
     const angle = s11?.angle ?? 0;

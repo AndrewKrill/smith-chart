@@ -338,7 +338,7 @@
       "synthFmin": "Start frequency (Hz)",
       "synthFmax": "Stop frequency (Hz)",
       "synthPoints": "Points",
-      "gate_normal": "Nominal",
+      "gate_normal": "Normal",
       "gateType": "Gate type",
       "gateBandpass": "Bandpass",
       "windowGateSeparation": "Transform window is separate from VNA gate shape selection.",
