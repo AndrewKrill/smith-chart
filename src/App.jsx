@@ -42,7 +42,7 @@ import {
 } from "./calibration.js";
 import { applyPortExtension } from "./portExtension.js";
 import { applyDeembedding } from "./deembedding.js";
-import { frequencyToTimeDomain, applyGate, gatedToSParamFormat, computeTdrResolution } from "./tdr.js";
+import { frequencyToTimeDomain, applyGate, gatedToSParamFormat } from "./tdr.js";
 import { computeUncertaintyBands, computeFixturePathAttenuation_dB } from "./uncertainty.js";
 import VnaTools from "./VnaTools.jsx";
 import VnaSmithChart from "./VnaSmithChart.jsx";
@@ -97,8 +97,8 @@ const initialTdrSettings = {
   gateEnabled: false,
   gateStart: 0,
   gateStop: 1e-9,
-  gateShape: "nominal",
-  gateNotch: false,
+  gateShape: "normal",
+  gateType: "bandpass",
   velocityFactor: 1,
   synthPoints: 201,
   synthFmin: null,
@@ -135,6 +135,14 @@ function App() {
   const [peSettings, setPeSettings] = useState(initialPeSettings);
   const [deembedSettings, setDeembedSettings] = useState(initialDeembedSettings);
   const [tdrSettings, setTdrSettings] = useState(initialTdrSettings);
+
+  useEffect(() => {
+    setTdrSettings((s) => ({
+      ...s,
+      gateShape: s.gateShape === "nominal" ? "normal" : (s.gateShape || "normal"),
+      gateType: s.gateType || (s.gateNotch ? "notch" : "bandpass"),
+    }));
+  }, []);
   const [uncertaintySettings, setUncertaintySettings] = useState(initialUncertaintySettings);
 
   // Split-chart mode: processed data on its own second Smith chart
@@ -387,7 +395,9 @@ function App() {
     if (!tdrSettings.enabled) return null;
     const tdrInput = sParameters ? effectiveSParamData : tdrEffectiveSynData;
     if (!tdrInput || Object.keys(tdrInput).length < 2) return null;
-    return frequencyToTimeDomain(tdrInput, tdrSettings.mode, tdrSettings.window);
+    const td = frequencyToTimeDomain(tdrInput, tdrSettings.mode, tdrSettings.window);
+    if (td.valid === false) return null;
+    return td;
   }, [tdrSettings.enabled, tdrSettings.mode, tdrSettings.window, effectiveSParamData, tdrEffectiveSynData, sParameters]);
 
   // Per-frequency fixture path attenuation (auto-computed when cal plane is active).
@@ -419,7 +429,13 @@ function App() {
   const gatedSParamData = useMemo(() => {
     if (!tdrSettings.enabled || !tdrSettings.gateEnabled || !tdrData) return null;
     try {
-      return applyGate(tdrData, tdrSettings.gateStart, tdrSettings.gateStop, tdrSettings.gateShape, tdrSettings.gateNotch);
+      return applyGate(
+        tdrData,
+        tdrSettings.gateStart,
+        tdrSettings.gateStop,
+        tdrSettings.gateShape,
+        tdrSettings.gateType || (tdrSettings.gateNotch ? "notch" : "bandpass"),
+      );
     } catch {
       return null;
     }
@@ -428,7 +444,7 @@ function App() {
   // Convert the gated result to standard S-param keyed format so it can flow
   // through the main correction pipeline (allImpedanceCalculations).
   const afterGatingData = useMemo(() => {
-    if (!tdrSettings.enabled || !tdrSettings.gateEnabled || !gatedSParamData) return null;
+    if (!tdrSettings.enabled || !tdrSettings.gateEnabled || !gatedSParamData || gatedSParamData.valid === false) return null;
     const baseData = afterPeData ?? rawSParamData;
     if (!baseData) return null;
     return gatedToSParamFormat(gatedSParamData, baseData);
@@ -468,7 +484,7 @@ function App() {
     cal: calSettings.enabled,
     deembed: deembedSettings.enabled,
     pe: peSettings.enabled,
-    gating: tdrSettings.enabled && tdrSettings.gateEnabled,
+    gating: tdrSettings.enabled && tdrSettings.gateEnabled && gatedSParamData?.valid !== false,
   };
 
   // zo of the loaded S-param file; used by VnaSmithChart for reflToZ conversion

@@ -12,11 +12,9 @@
  *   "lowpass_impulse" : enforce conjugate symmetry → real impulse response
  *   "lowpass_step"    : cumulative sum of low-pass impulse → step response
  *
- * Gate shapes (Kaiser β per Keysight convention):
- *   "minimum"  : β = 6
- *   "nominal"  : β = 9
- *   "wide"     : β = 13
- *   "maximum"  : β = 16
+ * Gate shapes (VNA-style cutoff/min-span rules):
+ *   "minimum" | "normal" | "wide" | "maximum"
+ * (legacy "nominal" is mapped to "normal")
  */
 
 import { speedOfLight, polarToRectangular, rectangularToPolar } from "./commonFunctions.js";
@@ -100,25 +98,59 @@ export function buildWindow(N, type) {
 }
 
 /**
- * Window metadata: sidelobe level (dB) and resolution factor relative to rectangular.
- * Values from standard DSP literature.
+ * Window metadata: sidelobe level (dB) and approximate VNA-style resolution factor.
  */
 export const windowInfo = {
   rectangular: { sidelobe_dB: -13, resolutionFactor: 1.0, label: "Rectangular" },
-  hamming: { sidelobe_dB: -42, resolutionFactor: 1.36, label: "Hamming" },
-  hanning: { sidelobe_dB: -31, resolutionFactor: 1.44, label: "Hanning" },
-  blackman: { sidelobe_dB: -58, resolutionFactor: 1.73, label: "Blackman" },
-  kaiser6: { sidelobe_dB: -44, resolutionFactor: 1.40, label: "Kaiser (β=6)" },
-  kaiser13: { sidelobe_dB: -70, resolutionFactor: 1.92, label: "Kaiser (β=13)" },
+  hamming: { sidelobe_dB: -42, resolutionFactor: 1.3, label: "Hamming" },
+  hanning: { sidelobe_dB: -31, resolutionFactor: 1.4, label: "Hanning" },
+  blackman: { sidelobe_dB: -58, resolutionFactor: 1.7, label: "Blackman" },
+  kaiser6: { sidelobe_dB: -44, resolutionFactor: 1.35, label: "Kaiser (β=6)" },
+  kaiser13: { sidelobe_dB: -70, resolutionFactor: 2.0, label: "Kaiser (β=13)" },
 };
 
-/** Gate-shape → Kaiser β mapping (Keysight convention). */
-export const gateShapeToKaiserBeta = {
-  minimum: 6,
-  nominal: 9,
-  wide: 13,
-  maximum: 16,
+/** VNA-style gate shape rules (time values are divided by fSpan). */
+export const gateShapeRules = {
+  minimum: { cutoffFactor: 1.4, minSpanFactor: 2.8 },
+  normal: { cutoffFactor: 2.8, minSpanFactor: 5.6 },
+  wide: { cutoffFactor: 4.4, minSpanFactor: 8.8 },
+  maximum: { cutoffFactor: 12.7, minSpanFactor: 25.4 },
 };
+
+export function normalizeGateShape(gateShape = "normal") {
+  const s = (gateShape || "").toLowerCase();
+  if (s === "nominal") return "normal";
+  if (s in gateShapeRules) return s;
+  return "normal";
+}
+
+function validateLowPassGrid(freqs) {
+  if (!freqs || freqs.length < 2) return { valid: false, reason: "insufficient frequency points" };
+  const M = freqs.length;
+  const fStart = freqs[0];
+  const fStop = freqs[M - 1];
+  const df = (fStop - fStart) / (M - 1);
+  if (!(df > 0)) return { valid: false, reason: "non-positive frequency spacing" };
+
+  const spacingTol = Math.max(df * 1e-2, 1);
+  for (let i = 1; i < M; i++) {
+    const step = freqs[i] - freqs[i - 1];
+    if (Math.abs(step - df) > spacingTol) {
+      return { valid: false, reason: "frequency grid is not uniformly spaced" };
+    }
+  }
+
+  const expectedStart = fStop / M;
+  const harmonicTol = Math.max(expectedStart * 0.05, df * 0.5);
+  if (Math.abs(fStart - expectedStart) > harmonicTol) {
+    return {
+      valid: false,
+      reason: "low-pass mode requires a harmonic grid (fStart ≈ fStop / points)",
+    };
+  }
+
+  return { valid: true, reason: "" };
+}
 
 // ---------------------------------------------------------------------------
 // Simple Cooley-Tukey FFT / IFFT (no external dependency)
@@ -205,7 +237,20 @@ export function frequencyToTimeDomain(sparamFreqData, mode = "bandpass", windowT
     .map(Number)
     .sort((a, b) => a - b);
   if (freqs.length < 2) {
-    return { timeAxis: [], realPart: [], imagPart: [], magnitude: [], fStart: 0, fStop: 0, df: 0, N: 0 };
+    return {
+      timeAxis: [],
+      realPart: [],
+      imagPart: [],
+      magnitude: [],
+      fStart: 0,
+      fStop: 0,
+      df: 0,
+      N: 0,
+      M: 0,
+      originalFreqs: [],
+      valid: false,
+      warning: "Need at least two frequency points",
+    };
   }
 
   const fStart = freqs[0];
@@ -231,11 +276,28 @@ export function frequencyToTimeDomain(sparamFreqData, mode = "bandpass", windowT
       imArr[k] = s11r.imaginary * win[k];
     }
   } else {
+    const lowPassGrid = validateLowPassGrid(freqs);
+    if (!lowPassGrid.valid) {
+      return {
+        timeAxis: [],
+        realPart: [],
+        imagPart: [],
+        magnitude: [],
+        fStart,
+        fStop,
+        df: 0,
+        N: 0,
+        M,
+        originalFreqs: [...freqs],
+        valid: false,
+        warning: `Low-pass transform rejected: ${lowPassGrid.reason}`,
+      };
+    }
+
     // Low-pass modes: enforce conjugate symmetry so IFFT → real signal.
-    // Synthesize DC value by linear extrapolation of first two points.
+    // Synthesize DC value from first harmonic sample.
     const s0r = polarToRectangular(sparamFreqData[freqs[0]].S11);
-    const s1r = polarToRectangular(sparamFreqData[freqs[1]].S11);
-    const dcRe = s0r.real - (s1r.real - s0r.real);
+    const dcRe = s0r.real;
     const dcIm = 0; // DC must be real for a real signal
 
     // Build one-sided spectrum at indices 0..M
@@ -284,10 +346,36 @@ export function frequencyToTimeDomain(sparamFreqData, mode = "bandpass", windowT
         return accI;
       });
       const stepMag = stepRe.map((r, i) => Math.sqrt(r * r + stepIm[i] * stepIm[i]));
-      return { timeAxis, realPart: stepRe, imagPart: stepIm, magnitude: stepMag, fStart, fStop, df, N: Nused, window: Array.from(win) };
+      return {
+        timeAxis,
+        realPart: stepRe,
+        imagPart: stepIm,
+        magnitude: stepMag,
+        fStart,
+        fStop,
+        df,
+        N: Nused,
+        M,
+        originalFreqs: [...freqs],
+        window: Array.from(win),
+        valid: true,
+      };
     }
 
-    return { timeAxis, realPart, imagPart, magnitude, fStart, fStop, df, N: Nused, window: Array.from(win) };
+    return {
+      timeAxis,
+      realPart,
+      imagPart,
+      magnitude,
+      fStart,
+      fStop,
+      df,
+      N: Nused,
+      M,
+      originalFreqs: [...freqs],
+      window: Array.from(win),
+      valid: true,
+    };
   }
 
   // Bandpass path: IFFT
@@ -299,7 +387,20 @@ export function frequencyToTimeDomain(sparamFreqData, mode = "bandpass", windowT
   const imagPart = Array.from(imArr);
   const magnitude = realPart.map((r, i) => Math.sqrt(r * r + imagPart[i] * imagPart[i]));
 
-  return { timeAxis, realPart, imagPart, magnitude, fStart, fStop, df, N: Nfft, window: Array.from(win) };
+  return {
+    timeAxis,
+    realPart,
+    imagPart,
+    magnitude,
+    fStart,
+    fStop,
+    df,
+    N: Nfft,
+    M,
+    originalFreqs: [...freqs],
+    window: Array.from(win),
+    valid: true,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -313,59 +414,88 @@ export function frequencyToTimeDomain(sparamFreqData, mode = "bandpass", windowT
  * @param {{timeAxis:number[], realPart:number[], imagPart:number[], fStart:number, fStop:number, df:number, N:number}} tdData
  * @param {number} tStart - gate start in seconds
  * @param {number} tStop - gate stop in seconds
- * @param {"minimum"|"nominal"|"wide"|"maximum"} gateShape
- * @param {boolean} [gateNotch=false] - when true, notch (reject) the gate window instead of passing it
+ * @param {"minimum"|"normal"|"nominal"|"wide"|"maximum"} gateShape
+ * @param {"bandpass"|"notch"|boolean} [gateType="bandpass"] - boolean kept for backward compatibility
  * @returns {{
  *   gatedTdReal: number[], gatedTdImag: number[],
- *   gatedFdMag: number[], gatedFdPhase: number[],
- *   freqAxis: number[]
+ *   gatedS11: { frequency:number, S11:{real:number, imaginary:number, magnitude:number, angle:number} }[],
+ *   gatedFdMag: number[], gatedFdPhase: number[], freqAxis: number[],
+ *   gateShape: string, gateType: "bandpass"|"notch",
+ *   valid: boolean, warning?: string
  * }}
  */
-export function applyGate(tdData, tStart, tStop, gateShape = "nominal", gateNotch = false) {
+export function applyGate(tdData, tStart, tStop, gateShape = "normal", gateType = "bandpass") {
   const { timeAxis, realPart, imagPart, fStart, fStop, df, N, window: specWin } = tdData;
+  const normalizedShape = normalizeGateShape(gateShape);
+  const modeType = typeof gateType === "boolean" ? (gateType ? "notch" : "bandpass") : gateType || "bandpass";
+
+  const emptyResult = {
+    gatedTdReal: [],
+    gatedTdImag: [],
+    gatedS11: [],
+    gatedFdMag: [],
+    gatedFdPhase: [],
+    freqAxis: [],
+    gateShape: normalizedShape,
+    gateType: modeType,
+    valid: false,
+  };
+
   if (!timeAxis || timeAxis.length === 0) {
-    return { gatedTdReal: [], gatedTdImag: [], gatedFdMag: [], gatedFdPhase: [], freqAxis: [] };
+    return emptyResult;
   }
 
-  const beta = gateShapeToKaiserBeta[gateShape] ?? 9;
+  const fSpan = Math.max(fStop - fStart, 0);
+  const shapeRule = gateShapeRules[normalizedShape] ?? gateShapeRules.normal;
+  const cutoff = fSpan > 0 ? shapeRule.cutoffFactor / fSpan : 0;
+  const minSpan = fSpan > 0 ? shapeRule.minSpanFactor / fSpan : 0;
+  const gateSpan = tStop - tStart;
+  if (!(gateSpan > 0)) {
+    return { ...emptyResult, warning: "Invalid gate span: gateStop must be greater than gateStart" };
+  }
+  if (fSpan > 0 && gateSpan < minSpan) {
+    return {
+      ...emptyResult,
+      warning: `Invalid gate span (${(gateSpan * 1e9).toFixed(3)} ns). Minimum for ${normalizedShape} is ${(minSpan * 1e9).toFixed(3)} ns`,
+    };
+  }
+
   const dt = timeAxis[1] - timeAxis[0];
+  if (!(dt > 0)) {
+    return { ...emptyResult, warning: "Invalid time axis spacing" };
+  }
+  const fullSpan = dt * (N - 1);
+  const isFullSpanGate = gateSpan >= fullSpan - dt * 0.5;
 
-  // Compute the full (unclamped) gate index range.  tStart and/or tStop may be
-  // negative (wrapping to near the end of the periodic IFFT buffer) or may
-  // exceed the total time span (wrapping to the beginning).  The IFFT output is
-  // a circular sequence with period N, so we use modular arithmetic rather than
-  // clamping.  gateLen_full is capped at N to ensure each sample is touched at
-  // most once.
   const i0_raw = Math.round(tStart / dt);
-  const i1_raw = Math.round(tStop / dt);
-  const gateLen_full = Math.min(i1_raw - i0_raw + 1, N); // Kaiser window length (full span, capped at N)
-  const gateWin = gateLen_full > 1 ? kaiserWindow(gateLen_full, beta) : [1];
+  const gateLen_full = Math.min(Math.max(Math.round(gateSpan / dt) + 1, 1), N);
 
-  // Apply gate window
+  function edgeWeight(localT) {
+    const edge = Math.max(0, Math.min(cutoff, gateSpan / 2));
+    if (edge <= 0 || gateSpan <= 0) return 1;
+    if (localT <= edge) return 0.5 * (1 - Math.cos((Math.PI * localT) / edge));
+    if (localT >= gateSpan - edge) return 0.5 * (1 - Math.cos((Math.PI * (gateSpan - localT)) / edge));
+    return 1;
+  }
+
+  const gateMask = new Float64Array(N).fill(modeType === "notch" ? 1 : 0);
+  if (isFullSpanGate) {
+    gateMask.fill(modeType === "notch" ? 0 : 1);
+  } else {
+    for (let wi = 0; wi < gateLen_full; wi++) {
+      const i = ((i0_raw + wi) % N + N) % N;
+      const localT = wi * dt;
+      const w = edgeWeight(localT);
+      if (modeType === "notch") gateMask[i] = Math.min(gateMask[i], 1 - w);
+      else gateMask[i] = Math.max(gateMask[i], w);
+    }
+  }
+
   const gatedRe = new Float64Array(N);
   const gatedIm = new Float64Array(N);
-
-  if (!gateNotch) {
-    // Passband: keep only the gate window, zero everything outside.
-    // Use circular (modulo N) indexing so that negative tStart wraps to the
-    // end of the array (e.g. -27 ns ≡ 1973 ns when the span is 2000 ns).
-    for (let wi = 0; wi < gateLen_full; wi++) {
-      const i = ((i0_raw + wi) % N + N) % N;
-      gatedRe[i] = realPart[i] * gateWin[wi];
-      gatedIm[i] = imagPart[i] * gateWin[wi];
-    }
-  } else {
-    // Notch: pass everything outside, suppress inside with Kaiser-weighted attenuation.
-    for (let i = 0; i < N; i++) {
-      gatedRe[i] = realPart[i];
-      gatedIm[i] = imagPart[i];
-    }
-    for (let wi = 0; wi < gateLen_full; wi++) {
-      const i = ((i0_raw + wi) % N + N) % N;
-      // Kaiser window: ~0 at edges → ~1 at center; (1-w) inverts for notch suppression
-      gatedRe[i] = realPart[i] * (1 - gateWin[wi]);
-      gatedIm[i] = imagPart[i] * (1 - gateWin[wi]);
-    }
+  for (let i = 0; i < N; i++) {
+    gatedRe[i] = realPart[i] * gateMask[i];
+    gatedIm[i] = imagPart[i] * gateMask[i];
   }
 
   // FFT gated time-domain data back to frequency domain
@@ -377,36 +507,45 @@ export function applyGate(tdData, tStart, tStop, gateShape = "nominal", gateNotc
   }
   fftInPlace(fftRe, fftIm, false); // forward FFT
 
-  // Build frequency axis.
-  // Only the first M bins (original measured frequency count) carry meaningful
-  // spectral content; bins beyond M were zero-padded and produce artefacts.
-  const halfN = Math.floor(N / 2);
-  const M = df > 0 ? Math.round((fStop - fStart) / df) + 1 : halfN;
-  const nOut = Math.min(halfN, M);
+  const originalFreqs = tdData.originalFreqs || [];
+  const measuredCount = tdData.M || originalFreqs.length || (df > 0 ? Math.round((fStop - fStart) / df) + 1 : 0);
   const freqAxis = [];
   const gatedFdMag = [];
   const gatedFdPhase = [];
-  for (let k = 0; k < nOut; k++) {
-    const fk = fStart + k * df;
+  const gatedS11 = [];
+  for (let k = 0; k < measuredCount; k++) {
+    const fk = originalFreqs[k] ?? (fStart + k * df);
+    const sw = Math.max(specWin ? (specWin[k] ?? 1) : 1, 1e-9);
+    const re = fftRe[k] / sw;
+    const im = fftIm[k] / sw;
+    const polar = rectangularToPolar({ real: re, imaginary: im });
     freqAxis.push(fk);
-    // The round-trip IFFT→gate→FFT introduces a per-frequency factor of specWin[k]
-    // (the spectral window applied before the IFFT).  Dividing by specWin[k] recovers
-    // the true S11[k].  We floor at 1e-6 to avoid divide-by-zero for windows (e.g.
-    // Hanning) whose edge bins are zero; those bins were already zeroed in the IFFT
-    // and remain near-zero after correction.
-    const sw = Math.max(specWin ? (specWin[k] ?? 1) : 1, 1e-6);
-    const mag = Math.sqrt(fftRe[k] * fftRe[k] + fftIm[k] * fftIm[k]) / sw;
-    const phase = (Math.atan2(fftIm[k], fftRe[k]) * 180) / Math.PI;
-    gatedFdMag.push(mag);
-    gatedFdPhase.push(phase);
+    gatedFdMag.push(polar.magnitude);
+    gatedFdPhase.push(polar.angle);
+    gatedS11.push({
+      frequency: fk,
+      S11: {
+        real: re,
+        imaginary: im,
+        magnitude: polar.magnitude,
+        angle: polar.angle,
+      },
+    });
   }
 
   return {
     gatedTdReal: Array.from(gatedRe),
     gatedTdImag: Array.from(gatedIm),
+    gatedS11,
     gatedFdMag,
     gatedFdPhase,
     freqAxis,
+    gateShape: normalizedShape,
+    gateType: modeType,
+    gateSpan,
+    cutoff,
+    minSpan,
+    valid: true,
   };
 }
 
@@ -449,34 +588,32 @@ export function gateCsToStartStop(center, span) {
  * @returns {Object} frequency-keyed S-param data in standard format
  */
 export function gatedToSParamFormat(gatedResult, originalSParamData) {
-  const { freqAxis, gatedFdMag, gatedFdPhase } = gatedResult;
-  if (!freqAxis || freqAxis.length === 0) return originalSParamData;
-
-  // Build a lookup from the gated result arrays
-  const n = freqAxis.length;
+  if (!gatedResult || gatedResult.valid === false) return originalSParamData;
+  const { gatedS11 = [], freqAxis = [], gatedFdMag = [], gatedFdPhase = [] } = gatedResult;
+  if ((!gatedS11 || gatedS11.length === 0) && (!freqAxis || freqAxis.length === 0)) return originalSParamData;
 
   const result = {};
-  const origFreqs = Object.keys(originalSParamData).map(Number).sort((a, b) => a - b);
+  const byFreq = new Map(gatedS11.map((p) => [p.frequency, p.S11]));
 
   for (const fStr of Object.keys(originalSParamData)) {
     const f = Number(fStr);
-
-    // Find nearest index in gated freqAxis
-    let lo = 0;
-    let hi = n - 1;
-    while (lo < hi) {
-      const mid = (lo + hi) >> 1;
-      if (freqAxis[mid] < f) lo = mid + 1;
-      else hi = mid;
+    let s11 = byFreq.get(f);
+    if (!s11 && freqAxis.length > 0) {
+      let bestIdx = 0;
+      let bestErr = Number.POSITIVE_INFINITY;
+      for (let i = 0; i < freqAxis.length; i++) {
+        const err = Math.abs(freqAxis[i] - f);
+        if (err < bestErr) {
+          bestErr = err;
+          bestIdx = i;
+        }
+      }
+      const re = gatedS11[bestIdx]?.S11?.real ?? polarToRectangular({ magnitude: gatedFdMag[bestIdx] ?? 0, angle: gatedFdPhase[bestIdx] ?? 0 }).real;
+      const im = gatedS11[bestIdx]?.S11?.imaginary ?? polarToRectangular({ magnitude: gatedFdMag[bestIdx] ?? 0, angle: gatedFdPhase[bestIdx] ?? 0 }).imaginary;
+      s11 = rectangularToPolar({ real: re, imaginary: im });
     }
-    // lo is the first index where freqAxis[lo] >= f
-    let idx = lo;
-    if (idx > 0 && Math.abs(freqAxis[idx - 1] - f) < Math.abs(freqAxis[idx] - f)) idx = idx - 1;
-
-    if (idx >= n) idx = n - 1;
-
-    const mag = gatedFdMag[idx] ?? 0;
-    const angle = gatedFdPhase[idx] ?? 0;
+    const mag = s11?.magnitude ?? 0;
+    const angle = s11?.angle ?? 0;
 
     // Preserve all original fields (S21, etc.) and override S11
     result[fStr] = { ...originalSParamData[fStr], S11: { magnitude: mag, angle } };
@@ -501,7 +638,7 @@ export function gatedToSParamFormat(gatedResult, originalSParamData) {
  *   fSpan: number
  * }}
  */
-export function computeTdrResolution(sparamFreqData, windowType = "rectangular", velocityFactor = 1) {
+export function computeTdrResolution(sparamFreqData, mode = "bandpass", windowType = "rectangular", velocityFactor = 1) {
   const freqs = Object.keys(sparamFreqData)
     .map(Number)
     .sort((a, b) => a - b);
@@ -511,13 +648,21 @@ export function computeTdrResolution(sparamFreqData, windowType = "rectangular",
   const fStop = freqs[freqs.length - 1];
   const fSpan = fStop - fStart;
   const resF = windowInfo[windowType]?.resolutionFactor ?? 1.0;
-
-  const resolution_s = resF / fSpan;
-  const resolution_m = (resolution_s * speedOfLight * velocityFactor) / 2; // one-way
-
   const df = fSpan / (freqs.length - 1);
-  const maxTime_s = 1 / df;
+
+  let baseResolution = 1 / Math.max(fSpan, 1e-30);
+  let maxTime_s = 1 / Math.max(df, 1e-30);
+  if (mode === "lowpass_impulse") {
+    baseResolution = 1 / Math.max(2 * fStop, 1e-30);
+    maxTime_s = 1 / Math.max(2 * df, 1e-30);
+  } else if (mode === "lowpass_step") {
+    baseResolution = 1 / Math.max(fStop, 1e-30);
+    maxTime_s = 1 / Math.max(2 * df, 1e-30);
+  }
+
+  const resolution_s = baseResolution * resF;
+  const resolution_m = (resolution_s * speedOfLight * velocityFactor) / 2;
   const maxTime_m = (maxTime_s * speedOfLight * velocityFactor) / 2;
 
-  return { resolution_s, resolution_m, maxTime_s, maxTime_m, fSpan };
+  return { resolution_s, resolution_m, maxTime_s, maxTime_m, fSpan, mode };
 }

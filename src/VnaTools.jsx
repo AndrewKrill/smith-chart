@@ -427,7 +427,7 @@ function DeembedTab({ deembedSettings, setDeembedSettings }) {
 // ---------------------------------------------------------------------------
 const TDR_MODES = ["bandpass", "lowpass_impulse", "lowpass_step"];
 const TDR_WINDOWS = ["rectangular", "hamming", "hanning", "blackman", "kaiser6", "kaiser13"];
-const GATE_SHAPES = ["minimum", "nominal", "wide", "maximum"];
+const GATE_SHAPES = ["minimum", "normal", "wide", "maximum"];
 
 function TdrTab({ tdrSettings, setTdrSettings, sparamData, isSynthesized, zo }) {
   const { t } = useTranslation();
@@ -447,14 +447,20 @@ function TdrTab({ tdrSettings, setTdrSettings, sparamData, isSynthesized, zo }) 
   // Resolution info
   const resInfo = useMemo(() => {
     if (!hasData) return null;
-    return computeTdrResolution(sparamData, ts.window, ts.velocityFactor || 1);
-  }, [sparamData, ts.window, ts.velocityFactor, hasData]);
+    return computeTdrResolution(sparamData, ts.mode, ts.window, ts.velocityFactor || 1);
+  }, [sparamData, ts.mode, ts.window, ts.velocityFactor, hasData]);
 
   // Gated data
   const gatedData = useMemo(() => {
     if (!tdData || !ts.gateEnabled) return null;
-    return applyGate(tdData, ts.gateStart || 0, ts.gateStop || 1e-9, ts.gateShape, ts.gateNotch);
-  }, [tdData, ts.gateEnabled, ts.gateStart, ts.gateStop, ts.gateShape, ts.gateNotch]);
+    return applyGate(
+      tdData,
+      ts.gateStart || 0,
+      ts.gateStop || 1e-9,
+      ts.gateShape,
+      ts.gateType || (ts.gateNotch ? "notch" : "bandpass"),
+    );
+  }, [tdData, ts.gateEnabled, ts.gateStart, ts.gateStop, ts.gateShape, ts.gateType, ts.gateNotch]);
 
   // Chart resize
   useEffect(() => {
@@ -471,11 +477,18 @@ function TdrTab({ tdrSettings, setTdrSettings, sparamData, isSynthesized, zo }) 
     if (!tdData || tdData.timeAxis.length === 0) return null;
     const tNs = tdData.timeAxis.map((t) => t * 1e9); // convert to ns
     const mag = tdData.magnitude;
-    // Impedance from reflection: Z = zo*(1+ρ)/(1−ρ), but clamp ρ < 1
-    const zArr = mag.map((rho) => {
-      const r = Math.min(rho, 0.9999);
-      return (zo * (1 + r)) / (1 - r);
-    });
+    const useSignedImpedance = ts.mode === "lowpass_step";
+    const zArr = useSignedImpedance
+      ? tdData.realPart.map((rho) => {
+          const r = Math.max(-0.9999, Math.min(0.9999, rho));
+          return (zo * (1 + r)) / (1 - r);
+        })
+      : mag.map((rho) => {
+          const r = Math.min(rho, 0.9999);
+          return (zo * (1 + r)) / (1 - r);
+        });
+    const impedanceLabel = useSignedImpedance ? "Z(t) (Ω, LP step)" : "Apparent |Z(t)| (Ω)";
+    const impedanceWarning = useSignedImpedance ? null : t("vna.tdr.apparentImpedanceWarning");
     // Shade gate region: build a gate indicator array (0 or 1)
     const gateArr = tNs.map((tn) => {
       if (!ts.gateEnabled) return null;
@@ -483,8 +496,8 @@ function TdrTab({ tdrSettings, setTdrSettings, sparamData, isSynthesized, zo }) 
       const te_ns = (ts.gateStop || 0) * 1e9;
       return tn >= ts_ns && tn <= te_ns ? 1 : null;
     });
-    return { tNs, mag, zArr, gateArr };
-  }, [tdData, ts.gateEnabled, ts.gateStart, ts.gateStop, zo]);
+    return { tNs, mag, zArr, gateArr, impedanceLabel, impedanceWarning };
+  }, [tdData, ts.mode, ts.gateEnabled, ts.gateStart, ts.gateStop, zo, t]);
 
   const tdChartOptions = useMemo(() => {
     if (!tdPlotData) return null;
@@ -494,9 +507,9 @@ function TdrTab({ tdrSettings, setTdrSettings, sparamData, isSynthesized, zo }) 
       series: [
         { label: "Time (ns)" },
         { label: "|Γ(t)|", stroke: "#1f77b4", width: 2, scale: "y" },
-        { label: "Z(t) (Ω)", stroke: "#ff7f0e", width: 1, scale: "y2" },
+        { label: tdPlotData.impedanceLabel, stroke: "#ff7f0e", width: 1, scale: "y2" },
       ],
-      axes: [{ label: "Time (ns)" }, { scale: "y", label: "|Γ(t)|" }, { scale: "y2", side: 1, label: "Z(t) (Ω)" }],
+      axes: [{ label: "Time (ns)" }, { scale: "y", label: "|Γ(t)|" }, { scale: "y2", side: 1, label: tdPlotData.impedanceLabel }],
       scales: { x: { time: false }, y: { auto: true }, y2: { auto: true } },
     };
   }, [chartWidth, tdPlotData]);
@@ -561,6 +574,10 @@ function TdrTab({ tdrSettings, setTdrSettings, sparamData, isSynthesized, zo }) 
           </FieldCell>
         </Row>
 
+        <Alert severity="info" sx={{ my: 1 }}>
+          {t("vna.tdr.windowGateSeparation")}
+        </Alert>
+
         {/* Resolution info */}
         {resInfo && (
           <Alert severity="info" sx={{ my: 1 }}>
@@ -569,6 +586,12 @@ function TdrTab({ tdrSettings, setTdrSettings, sparamData, isSynthesized, zo }) 
               res_mm: (resInfo.resolution_m * 1e3).toFixed(2),
               span_ns: (resInfo.maxTime_s * 1e9).toFixed(1),
             })}
+          </Alert>
+        )}
+
+        {tdData?.warning && (
+          <Alert severity="warning" sx={{ my: 1 }}>
+            {tdData.warning}
           </Alert>
         )}
 
@@ -633,8 +656,14 @@ function TdrTab({ tdrSettings, setTdrSettings, sparamData, isSynthesized, zo }) 
               {tdChartOptions && tdChartData && <UplotReact options={tdChartOptions} data={tdChartData} />}
             </div>
 
+            {tdPlotData?.impedanceWarning && (
+              <Alert severity="warning" sx={{ mt: 1 }}>
+                {tdPlotData.impedanceWarning}
+              </Alert>
+            )}
+
             {/* Cal-plane and gate markers info */}
-            {ts.gateEnabled && gatedData && (
+            {ts.gateEnabled && gatedData && gatedData.valid !== false && (
               <Alert severity="success" sx={{ mt: 1 }}>
                 {t("vna.tdr.gateApplied")}
               </Alert>
@@ -714,7 +743,12 @@ function TdrTab({ tdrSettings, setTdrSettings, sparamData, isSynthesized, zo }) 
               <Row>
                 <LabelCell>{t("vna.tdr.gateShape")}</LabelCell>
                 <FieldCell>
-                  <ToggleButtonGroup value={ts.gateShape} exclusive onChange={(_, v) => v && set("gateShape", v)} size="small">
+                  <ToggleButtonGroup
+                    value={ts.gateShape === "nominal" ? "normal" : ts.gateShape}
+                    exclusive
+                    onChange={(_, v) => v && set("gateShape", v)}
+                    size="small"
+                  >
                     {GATE_SHAPES.map((g) => (
                       <ToggleButton key={g} value={g}>
                         {t(`vna.tdr.gate_${g}`)}
@@ -725,14 +759,25 @@ function TdrTab({ tdrSettings, setTdrSettings, sparamData, isSynthesized, zo }) 
               </Row>
 
               <Row>
-                <LabelCell>{t("vna.tdr.gateMode")}</LabelCell>
+                <LabelCell>{t("vna.tdr.gateType")}</LabelCell>
                 <FieldCell>
-                  <ToggleButtonGroup value={ts.gateNotch ? "notch" : "passband"} exclusive onChange={(_, v) => v && set("gateNotch", v === "notch")} size="small">
-                    <ToggleButton value="passband">{t("vna.tdr.gatePassband")}</ToggleButton>
+                  <ToggleButtonGroup
+                    value={ts.gateType || (ts.gateNotch ? "notch" : "bandpass")}
+                    exclusive
+                    onChange={(_, v) => v && set("gateType", v)}
+                    size="small"
+                  >
+                    <ToggleButton value="bandpass">{t("vna.tdr.gateBandpass")}</ToggleButton>
                     <ToggleButton value="notch">{t("vna.tdr.gateNotch")}</ToggleButton>
                   </ToggleButtonGroup>
                 </FieldCell>
               </Row>
+
+              {gatedData?.warning && (
+                <Alert severity="warning" sx={{ mt: 1 }}>
+                  {gatedData.warning}
+                </Alert>
+              )}
 
               <Alert severity="info" sx={{ mt: 1 }}>
                 {t("vna.tdr.gateHint")}

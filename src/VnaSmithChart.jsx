@@ -154,11 +154,16 @@ export default function VnaSmithChart({
       const coord = [];
 
       if (stage.key === "afterGating") {
-        // Gated data uses a different format: { gatedFdMag, gatedFdPhase, freqAxis }
-        const { gatedFdMag, gatedFdPhase, freqAxis } = data;
-        if (!freqAxis || freqAxis.length === 0) continue;
-        for (let k = 0; k < freqAxis.length; k++) {
-          const rect = polarToRectangular({ magnitude: gatedFdMag[k], angle: gatedFdPhase[k] });
+        // Gated data may be in new complex-point format or legacy mag/phase arrays.
+        const gatedPoints = data.gatedS11 || [];
+        const freqAxis = data.freqAxis || [];
+        if ((!gatedPoints || gatedPoints.length === 0) && (!freqAxis || freqAxis.length === 0)) continue;
+        const n = gatedPoints.length > 0 ? gatedPoints.length : freqAxis.length;
+        for (let k = 0; k < n; k++) {
+          const point = gatedPoints[k];
+          const rect = point?.S11
+            ? { real: point.S11.real, imaginary: point.S11.imaginary }
+            : polarToRectangular({ magnitude: data.gatedFdMag?.[k] ?? 0, angle: data.gatedFdPhase?.[k] ?? 0 });
           const z = reflToZ(rect, refZo);
           coord.push(impedanceToSmithChart(z.real / zo, z.imaginary / zo, width));
         }

@@ -337,7 +337,12 @@
       "synthBandwidth": "Synthesis bandwidth",
       "synthFmin": "Start frequency (Hz)",
       "synthFmax": "Stop frequency (Hz)",
-      "synthPoints": "Points"
+      "synthPoints": "Points",
+      "gate_normal": "标准",
+      "gateType": "Gate type",
+      "gateBandpass": "Bandpass",
+      "windowGateSeparation": "Transform window is separate from VNA gate shape selection.",
+      "apparentImpedanceWarning": "Bandpass/impulse modes show magnitude-only apparent impedance; use LP Step for signed TDR impedance."
     },
     "unc": {
       "enabled": "不确定度已启用",
