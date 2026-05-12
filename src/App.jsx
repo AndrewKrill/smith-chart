@@ -502,13 +502,16 @@ function App() {
 
   // Intermediate trace data keyed by stage name, for the second Smith chart.
   // When no file is loaded, fall back to synthesized equivalents.
-  const intermediateTraces = {
-    raw: rawSParamData ?? synthesizedSParamData,
-    afterCal: activeStages.cal ? (afterCalData ?? calCorrectedSynData) : null,
-    afterDeembed: activeStages.deembed ? afterDeembedData : null,
-    afterPe: activeStages.pe ? (afterPeData ?? effectiveSynData) : null,
-    afterGating: activeStages.gating ? afterGatingData : null,
-  };
+  const intermediateTraces = useMemo(
+    () => ({
+      raw: rawSParamData ?? synthesizedSParamData,
+      afterCal: activeStages.cal ? (afterCalData ?? calCorrectedSynData) : null,
+      afterDeembed: activeStages.deembed ? afterDeembedData : null,
+      afterPe: activeStages.pe ? (afterPeData ?? effectiveSynData) : null,
+      afterGating: activeStages.gating ? afterGatingData : null,
+    }),
+    [rawSParamData, synthesizedSParamData, activeStages.cal, activeStages.deembed, activeStages.pe, activeStages.gating, afterCalData, calCorrectedSynData, afterDeembedData, afterPeData, effectiveSynData, afterGatingData],
+  );
 
   const filteredIntermediateTraces = useMemo(() => {
     if (!intermediateTraces) return intermediateTraces;
