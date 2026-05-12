@@ -295,9 +295,8 @@ function IntermediateTracesPlots({ intermediateTraces, activeStages, sParamZo, f
     const data = intermediateTraces[key];
     if (!data || typeof data !== "object") return false;
     if (Object.keys(data).length === 0) return false;
-    // "afterGating" in intermediateTraces is the raw applyGate output ({gatedFdMag, freqAxis, ...}),
-    // NOT the standard S-param format — skip it here (the Smith chart handles it separately).
-    if ("gatedFdMag" in data) return false;
+    // "afterGating" in intermediateTraces is raw applyGate output, not standard frequency-keyed S-params.
+    if ("gatedFdMag" in data || "gatedS11" in data) return false;
     if (key === "raw") return true;
     if (key === "afterCal") return activeStages.cal;
     if (key === "afterDeembed") return activeStages.deembed;

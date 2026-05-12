@@ -337,7 +337,12 @@
       "synthBandwidth": "Synthesis bandwidth",
       "synthFmin": "Start frequency (Hz)",
       "synthFmax": "Stop frequency (Hz)",
-      "synthPoints": "Points"
+      "synthPoints": "Points",
+      "gate_normal": "标准",
+      "gateType": "Gate type",
+      "gateBandpass": "Bandpass",
+      "windowGateSeparation": "变换窗与 VNA 风格门形选择是分开的。",
+      "apparentImpedanceWarning": "Bandpass/impulse 模式仅显示幅度表观阻抗；要获得有符号 TDR 阻抗请使用 LP Step。"
     },
     "unc": {
       "enabled": "不确定度已启用",

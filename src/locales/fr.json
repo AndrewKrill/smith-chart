@@ -337,7 +337,12 @@
       "synthBandwidth": "Synthesis bandwidth",
       "synthFmin": "Start frequency (Hz)",
       "synthFmax": "Stop frequency (Hz)",
-      "synthPoints": "Points"
+      "synthPoints": "Points",
+      "gate_normal": "Normal",
+      "gateType": "Gate type",
+      "gateBandpass": "Bandpass",
+      "windowGateSeparation": "La fenêtre de transformée est distincte de la sélection de forme de porte de type VNA.",
+      "apparentImpedanceWarning": "Les modes bandpass/impulse affichent une impédance apparente en magnitude seulement ; utilisez LP Step pour une impédance TDR signée."
     },
     "unc": {
       "enabled": "Incertitude activée",

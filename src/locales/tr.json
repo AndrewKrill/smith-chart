@@ -337,7 +337,12 @@
       "synthBandwidth": "Synthesis bandwidth",
       "synthFmin": "Start frequency (Hz)",
       "synthFmax": "Stop frequency (Hz)",
-      "synthPoints": "Points"
+      "synthPoints": "Points",
+      "gate_normal": "Normal",
+      "gateType": "Gate type",
+      "gateBandpass": "Bandpass",
+      "windowGateSeparation": "Dönüşüm penceresi, VNA benzeri geçit şekli seçiminden ayrıdır.",
+      "apparentImpedanceWarning": "Bandpass/impulse modları yalnızca genlik tabanlı görünür empedans gösterir; işaretli TDR empedansı için LP Step kullanın."
     },
     "unc": {
       "enabled": "Belirsizlik etkin",

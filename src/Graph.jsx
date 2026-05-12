@@ -870,17 +870,20 @@ function Graph({
     svg.selectAll("*").remove();
     if (!gatedSParamData) return;
 
-    const { gatedFdMag, gatedFdPhase, freqAxis } = gatedSParamData;
-    if (!freqAxis || freqAxis.length === 0) return;
+    const gatedPoints = gatedSParamData.gatedS11 || [];
+    const freqAxis = gatedSParamData.freqAxis || [];
+    if ((!gatedPoints || gatedPoints.length === 0) && (!freqAxis || freqAxis.length === 0)) return;
 
     const refZo = sParameters?.settings?.zo || zo;
 
     // Map gated frequency-domain back to Smith chart coordinates
     const coord = [];
-    for (let k = 0; k < freqAxis.length; k++) {
-      const mag = gatedFdMag[k];
-      const phase_deg = gatedFdPhase[k];
-      const rect = polarToRectangular({ magnitude: mag, angle: phase_deg });
+    const n = gatedPoints.length > 0 ? gatedPoints.length : freqAxis.length;
+    for (let k = 0; k < n; k++) {
+      const point = gatedPoints[k];
+      const rect = point?.S11
+        ? { real: point.S11.real, imaginary: point.S11.imaginary }
+        : polarToRectangular({ magnitude: gatedSParamData.gatedFdMag?.[k] ?? 0, angle: gatedSParamData.gatedFdPhase?.[k] ?? 0 });
       const z = reflToZ(rect, refZo);
       coord.push(impedanceToSmithChart(z.real / zo, z.imaginary / zo, width));
     }

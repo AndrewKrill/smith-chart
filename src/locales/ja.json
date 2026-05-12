@@ -337,7 +337,12 @@
       "synthBandwidth": "Synthesis bandwidth",
       "synthFmin": "Start frequency (Hz)",
       "synthFmax": "Stop frequency (Hz)",
-      "synthPoints": "Points"
+      "synthPoints": "Points",
+      "gate_normal": "標準",
+      "gateType": "Gate type",
+      "gateBandpass": "Bandpass",
+      "windowGateSeparation": "変換ウィンドウは、VNA 風ゲート形状の選択とは独立しています。",
+      "apparentImpedanceWarning": "bandpass/impulse モードのインピーダンスは振幅のみの見かけ値です。符号付き TDR インピーダンスには LP Step を使用してください。"
     },
     "unc": {
       "enabled": "不確かさを有効化",

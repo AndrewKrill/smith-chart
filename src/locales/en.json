@@ -340,7 +340,12 @@
       "synthPoints": "Points",
       "gateMode": "Gate mode",
       "gatePassband": "Passband",
-      "gateNotch": "Notch (reject)"
+      "gateNotch": "Notch (reject)",
+      "gate_normal": "Normal",
+      "gateType": "Gate type",
+      "gateBandpass": "Bandpass",
+      "windowGateSeparation": "Transform window is separate from VNA gate shape selection.",
+      "apparentImpedanceWarning": "Bandpass/impulse modes show magnitude-only apparent impedance; use LP Step for signed TDR impedance."
     },
     "unc": {
       "enabled": "Uncertainty enabled",
