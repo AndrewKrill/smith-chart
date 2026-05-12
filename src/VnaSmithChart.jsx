@@ -547,8 +547,8 @@ export default function VnaSmithChart({
               <svg ref={svgRef} style={{ margin: "8px" }}>
                 <g ref={topGroupRef}>
                   <g ref={tracingArcsRef} />
-                  <g ref={tracesRef} />
                   <g ref={dp0Ref} />
+                  <g ref={tracesRef} />
                   <g ref={hoverRectsRef} />
                 </g>
               </svg>
