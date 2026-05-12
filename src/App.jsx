@@ -443,12 +443,14 @@ function App() {
 
   // Convert the gated result to standard S-param keyed format so it can flow
   // through the main correction pipeline (allImpedanceCalculations).
+  // IMPORTANT: use the primary Smith-chart dataset as the key template so the
+  // corrected/gated frequency span does not exceed what is being plotted.
   const afterGatingData = useMemo(() => {
     if (!tdrSettings.enabled || !tdrSettings.gateEnabled || !gatedSParamData || gatedSParamData.valid === false) return null;
-    const baseData = afterPeData ?? rawSParamData ?? tdrEffectiveSynData;
+    const baseData = afterPeData ?? rawSParamData ?? effectiveSynData ?? synthesizedSParamData ?? tdrEffectiveSynData;
     if (!baseData) return null;
     return gatedToSParamFormat(gatedSParamData, baseData);
-  }, [tdrSettings.enabled, tdrSettings.gateEnabled, gatedSParamData, afterPeData, rawSParamData, tdrEffectiveSynData]);
+  }, [tdrSettings.enabled, tdrSettings.gateEnabled, gatedSParamData, afterPeData, rawSParamData, effectiveSynData, synthesizedSParamData, tdrEffectiveSynData]);
 
   // Final pipeline circuit: bake in afterGatingData when gating is active, otherwise
   // falls back to correctedUserCircuit (which already has afterPeData).
