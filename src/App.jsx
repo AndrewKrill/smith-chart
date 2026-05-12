@@ -445,10 +445,10 @@ function App() {
   // through the main correction pipeline (allImpedanceCalculations).
   const afterGatingData = useMemo(() => {
     if (!tdrSettings.enabled || !tdrSettings.gateEnabled || !gatedSParamData || gatedSParamData.valid === false) return null;
-    const baseData = afterPeData ?? rawSParamData;
+    const baseData = afterPeData ?? rawSParamData ?? tdrEffectiveSynData;
     if (!baseData) return null;
     return gatedToSParamFormat(gatedSParamData, baseData);
-  }, [tdrSettings.enabled, tdrSettings.gateEnabled, gatedSParamData, afterPeData, rawSParamData]);
+  }, [tdrSettings.enabled, tdrSettings.gateEnabled, gatedSParamData, afterPeData, rawSParamData, tdrEffectiveSynData]);
 
   // Final pipeline circuit: bake in afterGatingData when gating is active, otherwise
   // falls back to correctedUserCircuit (which already has afterPeData).
@@ -505,8 +505,19 @@ function App() {
     afterCal: activeStages.cal ? (afterCalData ?? calCorrectedSynData) : null,
     afterDeembed: activeStages.deembed ? afterDeembedData : null,
     afterPe: activeStages.pe ? (afterPeData ?? effectiveSynData) : null,
-    afterGating: activeStages.gating ? gatedSParamData : null,
+    afterGating: activeStages.gating ? afterGatingData : null,
   };
+
+  // DP0 impedance: the user-specified black-box target (first component in the circuit)
+  // Shown as a reference marker on the Corrected S-parameters Smith chart.
+  const dp0Impedance = useMemo(() => {
+    const comp = userCircuit[0];
+    if (!comp || comp.name !== "blackBox") return null;
+    const r = parseFloat(comp.real);
+    const im = parseFloat(comp.imaginary);
+    if (isNaN(r)) return null;
+    return { real: r, imaginary: isNaN(im) ? 0 : im };
+  }, [userCircuit]);
 
   // In overlay mode, show the raw/uncorrected trace behind the corrected one —
   // only meaningful when a file is loaded (synthesized data has no separate raw trace).
@@ -630,6 +641,8 @@ function App() {
                   visibleStages={visibleStages}
                   setVisibleStages={setVisibleStages}
                   activeStages={activeStages}
+                  dp0Impedance={dp0Impedance}
+                  freqUnit={settings.frequencyUnit}
                 />
               </Card>
             </Grid>
