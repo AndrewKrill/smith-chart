@@ -318,19 +318,21 @@ export default function VnaSmithChart({
         freqPoints.push({ fStr, zReal: z.real, zImag: z.imaginary });
       }
 
-      if (coord.length < 2) continue;
+      if (coord.length === 0) continue;
 
-      // Trace path
-      const pathStr = `M ${coord[0][0]} ${coord[0][1]} ${coord.map((c) => `L ${c[0]} ${c[1]}`).join(" ")}`;
-      const pathEl = svg
-        .append("path")
-        .attr("stroke-linecap", "round")
-        .attr("stroke-linejoin", "round")
-        .attr("fill", "none")
-        .attr("stroke", stage.color)
-        .attr("stroke-width", stage.widthPx)
-        .attr("d", pathStr);
-      if (stage.dash) pathEl.attr("stroke-dasharray", stage.dash);
+      if (coord.length >= 2) {
+        // Trace path
+        const pathStr = `M ${coord[0][0]} ${coord[0][1]} ${coord.map((c) => `L ${c[0]} ${c[1]}`).join(" ")}`;
+        const pathEl = svg
+          .append("path")
+          .attr("stroke-linecap", "round")
+          .attr("stroke-linejoin", "round")
+          .attr("fill", "none")
+          .attr("stroke", stage.color)
+          .attr("stroke-width", stage.widthPx)
+          .attr("d", pathStr);
+        if (stage.dash) pathEl.attr("stroke-dasharray", stage.dash);
+      }
 
       // Small frequency-point dots for hover snapping
       coord.forEach(([cx, cy], idx) => {
