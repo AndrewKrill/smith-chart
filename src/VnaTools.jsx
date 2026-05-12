@@ -489,18 +489,17 @@ function TdrTab({ tdrSettings, setTdrSettings, sparamData, isSynthesized, zo }) 
         });
     const impedanceLabel = useSignedImpedance ? "Z(t) (Ω, LP step)" : "Apparent |Z(t)| (Ω)";
     const impedanceWarning = useSignedImpedance ? null : t("vna.tdr.apparentImpedanceWarning");
-    // Shade gate region: build a gate indicator array (0 or 1)
-    const gateArr = tNs.map((tn) => {
-      if (!ts.gateEnabled) return null;
-      const ts_ns = (ts.gateStart || 0) * 1e9;
-      const te_ns = (ts.gateStop || 0) * 1e9;
-      return tn >= ts_ns && tn <= te_ns ? 1 : null;
-    });
-    return { tNs, mag, zArr, gateArr, impedanceLabel, impedanceWarning };
-  }, [tdData, ts.mode, ts.gateEnabled, ts.gateStart, ts.gateStop, zo, t]);
+    // Gate filter: use the actual shaped window from applyGate when available
+    const gateFilterArr =
+      ts.gateEnabled && gatedData && gatedData.valid !== false && gatedData.gateMask?.length === tNs.length
+        ? gatedData.gateMask
+        : null;
+    return { tNs, mag, zArr, gateFilterArr, impedanceLabel, impedanceWarning };
+  }, [tdData, ts.mode, ts.gateEnabled, zo, t, gatedData]);
 
   const tdChartOptions = useMemo(() => {
     if (!tdPlotData) return null;
+    const showGate = !!tdPlotData.gateFilterArr;
     return {
       width: chartWidth,
       height: 300,
@@ -508,15 +507,22 @@ function TdrTab({ tdrSettings, setTdrSettings, sparamData, isSynthesized, zo }) 
         { label: "Time (ns)" },
         { label: "|Γ(t)|", stroke: "#1f77b4", width: 2, scale: "y" },
         { label: tdPlotData.impedanceLabel, stroke: "#ff7f0e", width: 1, scale: "y2" },
+        ...(showGate ? [{ label: "Gate filter", stroke: "rgba(0,160,0,0.8)", width: 1.5, scale: "y", dash: [4, 3] }] : []),
       ],
-      axes: [{ label: "Time (ns)" }, { scale: "y", label: "|Γ(t)|" }, { scale: "y2", side: 1, label: tdPlotData.impedanceLabel }],
+      axes: [
+        { label: "Time (ns)" },
+        { scale: "y", label: "|Γ(t)|" },
+        { scale: "y2", side: 1, label: tdPlotData.impedanceLabel },
+      ],
       scales: { x: { time: false }, y: { auto: true }, y2: { auto: true } },
     };
   }, [chartWidth, tdPlotData]);
 
   const tdChartData = useMemo(() => {
     if (!tdPlotData) return null;
-    return [tdPlotData.tNs, tdPlotData.mag, tdPlotData.zArr];
+    const base = [tdPlotData.tNs, tdPlotData.mag, tdPlotData.zArr];
+    if (tdPlotData.gateFilterArr) base.push(tdPlotData.gateFilterArr);
+    return base;
   }, [tdPlotData]);
 
   // Gate start/stop/center/span linked fields
