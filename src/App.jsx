@@ -29,7 +29,7 @@ import { theme, convertSettingsToFloat, unitConverter, polarToRectangular, recta
 import { circuitComponents } from "./circuitComponents.js";
 
 import { allImpedanceCalculations, synthesizeS11FromCircuit } from "./impedanceFunctions.js";
-// import { sParamFrequencyRange } from "./sparam.js"; // Import the sParamFrequencyRange function
+import { sParamFrequencyRange } from "./sparam.js";
 
 import {
   applyCalibrationToDataset,
@@ -510,6 +510,33 @@ function App() {
     afterGating: activeStages.gating ? afterGatingData : null,
   };
 
+  const filteredIntermediateTraces = useMemo(() => {
+    if (!intermediateTraces) return intermediateTraces;
+
+    const numericalFspan = settingsFloat.fSpan * unitConverter[settings.fSpanUnit];
+    const fMin = numericalFrequency - numericalFspan;
+    const fMax = numericalFrequency + numericalFspan;
+
+    const filterStageData = (data) => {
+      if (!data) return data;
+      if (numericalFspan > 0) return sParamFrequencyRange(data, fMin, fMax);
+
+      const exactPoint = data[numericalFrequency];
+      if (exactPoint) return { [numericalFrequency]: exactPoint };
+
+      const nearestFrequency = Object.keys(data)
+        .map(Number)
+        .reduce((nearest, current) =>
+          Math.abs(current - numericalFrequency) < Math.abs(nearest - numericalFrequency) ? current : nearest,
+        Number.POSITIVE_INFINITY);
+
+      if (!Number.isFinite(nearestFrequency) || !data[nearestFrequency]) return {};
+      return { [nearestFrequency]: data[nearestFrequency] };
+    };
+
+    return Object.fromEntries(Object.entries(intermediateTraces).map(([stageKey, data]) => [stageKey, filterStageData(data)]));
+  }, [intermediateTraces, numericalFrequency, settingsFloat.fSpan, settings.fSpanUnit]);
+
   // DP0 impedance: the user-specified black-box target (first component in the circuit)
   // Shown as a reference marker on the Corrected S-parameters Smith chart.
   const dp0Impedance = useMemo(() => {
@@ -639,7 +666,7 @@ function App() {
                 <VnaSmithChart
                   zo={settingsFloat.zo}
                   sParamZo={sParamZo}
-                  intermediateTraces={intermediateTraces}
+                  intermediateTraces={filteredIntermediateTraces}
                   visibleStages={visibleStages}
                   setVisibleStages={setVisibleStages}
                   activeStages={activeStages}
