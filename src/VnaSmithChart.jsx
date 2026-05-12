@@ -378,7 +378,7 @@ export default function VnaSmithChart({
     svg.append("circle").attr("cx", cx).attr("cy", cy).attr("r", DP0_R + 2).attr("fill", "white").attr("stroke", "none");
     // Filled marker
     svg.append("circle").attr("cx", cx).attr("cy", cy).attr("r", DP0_R).attr("fill", "#d62728").attr("stroke", "#7f1010").attr("stroke-width", 1.5);
-    // Label "DP0"
+    // Label "DP0" — 5 chars × ~8 px/char average width
     const strLen = 5 * 8;
     svg
       .append("rect")
