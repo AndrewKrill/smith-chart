@@ -414,13 +414,18 @@ function App() {
   }, [tdrSettings.enabled, tdrSettings.mode, tdrSettings.window, effectiveSParamData, tdrEffectiveSynData, sParameters]);
 
   // Per-frequency calibration-path attenuation (auto-computed when cal plane is active).
-  // Uses components on the DUT side of the calibration plane (indices 1..planeDP), i.e. the
-  // path from the DUT (DP0) to the cal plane.  Attenuation along this path raises the effective
-  // noise floor for the DUT measurement and therefore must be included in the uncertainty model.
+  // Uses components on the VNA side of the calibration plane (indices planeDP+1..end), i.e. the
+  // path from the cal plane to the VNA port.  Even though these components are "calibrated out",
+  // a weak DUT reflection must still travel through them before reaching the VNA receiver, so the
+  // effective noise floor seen at the DUT is raised by the round-trip fixture attenuation.
   const calibrationPathAttenuation_dB = useMemo(() => {
     if (!calSettings.enabled || calSettings.planeDP == null) return null;
     if (!effectiveSParamData) return null;
-    const calibrationPathComps = userCircuit.slice(1, calSettings.planeDP + 1);
+    // Slice components AFTER the calibration plane (toward the VNA / right side).
+    // Exclude the sparam block — it represents measured data, not a physical fixture element.
+    const sParamIdx = userCircuit.findIndex((c) => c.name === "sparam");
+    const endIdx = sParamIdx === -1 ? userCircuit.length : sParamIdx;
+    const calibrationPathComps = userCircuit.slice(calSettings.planeDP + 1, endIdx);
     if (calibrationPathComps.length === 0) return null;
     const freqs = Object.keys(effectiveSParamData)
       .map(Number)

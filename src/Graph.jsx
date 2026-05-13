@@ -26,6 +26,7 @@ import SnackbarContent from "@mui/material/SnackbarContent";
 import { arcColors, processImpedance, parseInput, reflToZ, polarToRectangular, unitConverter, rectangularToPolar } from "./commonFunctions.js";
 import { sparamNoiseCircles, sparamGainCircles, stabilityCircles } from "./sparam.js";
 import { speedOfLight } from "./commonFunctions.js";
+import { UNCERTAINTY_FILL, UNCERTAINTY_STROKE, buildUncertaintyPathStr } from "./uncertaintyRender.js";
 
 // Dedicated S-parameter stroke colors (Okabe–Ito–style); avoids clashing with arcColors used for Z traces
 const sParamColorLut = {
@@ -828,7 +829,7 @@ function Graph({
   }, [peEnabled, peLength_m, peEeff, sParameters, prePeSynData, effectiveSpData, zo, width]);
 
   // ---------------------------------------------------------------------------
-  // VNA overlay: Uncertainty ellipses around each S11 frequency point
+  // VNA overlay: Uncertainty region as ellipse/loop in Γ-space
   // ---------------------------------------------------------------------------
   useEffect(() => {
     const svg = d3.select(uncertaintyRef.current);
@@ -838,7 +839,7 @@ function Graph({
     const sparamData = sParameters ? sParameters.data : effectiveSpData;
     if (!sparamData) return;
     const refZo = sParameters?.settings?.zo || zo;
-    const { freqs, upper_dB, lower_dB } = uncertaintyBands;
+    const { freqs, upper_dB } = uncertaintyBands;
 
     const stageByFreq = new Map(Object.entries(sparamData).filter(([, point]) => point?.S11).map(([fStr, point]) => [Number(fStr), point]));
     const stageFreqNums = Array.from(stageByFreq.keys())
@@ -862,40 +863,33 @@ function Graph({
       return Math.abs(targetF - lower) <= Math.abs(upper - targetF) ? lower : upper;
     };
 
-    const upperCoords = [];
-    const lowerCoords = [];
+    // Collect one Γ-space circle per frequency: center = S11 point, radius = δΓ
+    const pts = [];
     freqs.forEach((f, i) => {
       const matchedF = matchStageFreq(Number(f));
       if (matchedF === null || matchedF === undefined) return;
       const point = stageByFreq.get(matchedF);
       if (!point?.S11) return;
-      const baseAngle = point.S11.angle;
-      const upperMag = Math.min(Math.max(Math.pow(10, (upper_dB?.[i] ?? -300) / 20), 1e-15), 1 - 1e-9);
-      const lowerMag = Math.min(Math.max(Math.pow(10, (lower_dB?.[i] ?? -300) / 20), 1e-15), 1 - 1e-9);
-
-      const upperZ = reflToZ(polarToRectangular({ magnitude: upperMag, angle: baseAngle }), refZo);
-      const lowerZ = reflToZ(polarToRectangular({ magnitude: lowerMag, angle: baseAngle }), refZo);
-      upperCoords.push(impedanceToSmithChart(upperZ.real / zo, upperZ.imaginary / zo, width));
-      lowerCoords.push(impedanceToSmithChart(lowerZ.real / zo, lowerZ.imaginary / zo, width));
+      const mag = point.S11.magnitude;
+      const angRad = ((point.S11.angle ?? 0) * Math.PI) / 180;
+      const gr = mag * Math.cos(angRad);
+      const gi = mag * Math.sin(angRad);
+      const upperMag = Math.min(Math.pow(10, (upper_dB?.[i] ?? -300) / 20), 1 - 1e-9);
+      const dG = Math.max(0, upperMag - mag);
+      pts.push({ gr, gi, dG });
     });
 
-    const drawPath = (coords, stroke) => {
-      if (coords.length >= 2) {
-        const d = `M ${coords[0][0]} ${coords[0][1]} ` + coords.slice(1).map((c) => `L ${c[0]} ${c[1]}`).join(" ");
-        svg
-          .append("path")
-          .attr("fill", "none")
-          .attr("stroke", stroke)
-          .attr("stroke-width", 1)
-          .attr("stroke-linecap", "round")
-          .attr("stroke-linejoin", "round")
-          .attr("d", d);
-      } else if (coords.length === 1) {
-        svg.append("circle").attr("cx", coords[0][0]).attr("cy", coords[0][1]).attr("r", 1.5).attr("fill", stroke).attr("stroke", "none");
-      }
-    };
-    drawPath(upperCoords, "rgba(200,100,0,0.75)");
-    drawPath(lowerCoords, "rgba(200,100,0,0.75)");
+    const pathStr = buildUncertaintyPathStr(pts, refZo, zo, width);
+    if (pathStr) {
+      svg
+        .append("path")
+        .attr("fill", UNCERTAINTY_FILL)
+        .attr("stroke", UNCERTAINTY_STROKE)
+        .attr("stroke-width", 1)
+        .attr("stroke-linejoin", "round")
+        .attr("stroke-linecap", "round")
+        .attr("d", pathStr);
+    }
   }, [uncertaintyBands, sParameters, effectiveSpData, zo, width]);
 
   // ---------------------------------------------------------------------------
