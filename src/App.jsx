@@ -158,6 +158,7 @@ function App() {
     afterPe: true,
     afterGating: true,
   });
+  const [targetDpIndex, setTargetDpIndex] = useState(0);
 
   const settingsFloat = convertSettingsToFloat(JSON.parse(JSON.stringify(settings)));
 
@@ -578,16 +579,71 @@ function App() {
     return Object.fromEntries(Object.entries(intermediateTraces).map(([stageKey, data]) => [stageKey, filterStageData(data)]));
   }, [intermediateTraces, numericalFrequency, settingsFloat.fSpan, settings.fSpanUnit]);
 
-  // DP0 impedance: the user-specified black-box target (first component in the circuit)
-  // Shown as a reference marker on the Corrected S-parameters Smith chart.
-  const dp0Impedance = useMemo(() => {
-    const comp = userCircuit[0];
-    if (!comp || comp.name !== "blackBox") return null;
-    const r = parseFloat(comp.real);
-    const im = parseFloat(comp.imaginary);
-    if (isNaN(r)) return null;
-    return { real: r, imaginary: isNaN(im) ? 0 : im };
+  const filteredUncertaintyBands = useMemo(() => {
+    if (!uncertaintyBands?.freqs?.length) return uncertaintyBands;
+    const numericalFspan = settingsFloat.fSpan * unitConverter[settings.fSpanUnit];
+    const fMin = numericalFrequency - numericalFspan;
+    const fMax = numericalFrequency + numericalFspan;
+    const freqs = uncertaintyBands.freqs.map(Number);
+    const upper_dB = uncertaintyBands.upper_dB || [];
+    const lower_dB = uncertaintyBands.lower_dB || [];
+
+    if (numericalFspan > 0) {
+      const keep = freqs
+        .map((f, i) => ({ f, i }))
+        .filter(({ f }) => Number.isFinite(f) && f >= fMin && f <= fMax)
+        .map(({ i }) => i);
+      return {
+        freqs: keep.map((i) => freqs[i]),
+        upper_dB: keep.map((i) => upper_dB[i]),
+        lower_dB: keep.map((i) => lower_dB[i]),
+      };
+    }
+
+    const nearestIdx = freqs.reduce(
+      (bestIdx, f, i) => (Math.abs(f - numericalFrequency) < Math.abs(freqs[bestIdx] - numericalFrequency) ? i : bestIdx),
+      0,
+    );
+    if (!Number.isFinite(freqs[nearestIdx])) return { freqs: [], upper_dB: [], lower_dB: [] };
+    return {
+      freqs: [freqs[nearestIdx]],
+      upper_dB: [upper_dB[nearestIdx]],
+      lower_dB: [lower_dB[nearestIdx]],
+    };
+  }, [uncertaintyBands, numericalFrequency, settingsFloat.fSpan, settings.fSpanUnit]);
+
+  const maxSelectableTargetDpIndex = useMemo(() => {
+    const sParamIdx = userCircuit.findIndex((c) => c.name === "sparam");
+    return sParamIdx === -1 ? userCircuit.length - 1 : sParamIdx - 1;
   }, [userCircuit]);
+
+  const targetDpOptions = useMemo(() => {
+    if (maxSelectableTargetDpIndex < 0) return [];
+    return Array.from({ length: maxSelectableTargetDpIndex + 1 }, (_, i) => i);
+  }, [maxSelectableTargetDpIndex]);
+
+  useEffect(() => {
+    if (targetDpOptions.length === 0) return;
+    setTargetDpIndex((idx) => Math.min(Math.max(idx, 0), targetDpOptions[targetDpOptions.length - 1]));
+  }, [targetDpOptions]);
+
+  const targetDpTrace = useMemo(() => {
+    if (!targetDpOptions.length) return null;
+    const selectedIdx = Math.min(Math.max(targetDpIndex, 0), targetDpOptions[targetDpOptions.length - 1]);
+    const subCircuit = userCircuit.slice(0, selectedIdx + 1);
+    if (subCircuit.length === 0) return null;
+    if (subCircuit.findIndex((c) => c.name === "sparam") !== -1) return null;
+
+    const freqs = Array.from(
+      new Set(
+        Object.values(filteredIntermediateTraces || {})
+          .flatMap((stageData) => (stageData ? Object.keys(stageData).map(Number) : []))
+          .filter(Number.isFinite),
+      ),
+    ).sort((a, b) => a - b);
+    const selectedFreqs = freqs.length ? freqs : [numericalFrequency];
+    return synthesizeS11FromCircuit(subCircuit, selectedFreqs, settingsFloat.zo);
+  }, [targetDpIndex, targetDpOptions, userCircuit, filteredIntermediateTraces, numericalFrequency, settingsFloat.zo]);
 
   // In overlay mode, show the raw/uncorrected trace behind the corrected one —
   // only meaningful when a file is loaded (synthesized data has no separate raw trace).
@@ -711,11 +767,14 @@ function App() {
                   zo={settingsFloat.zo}
                   sParamZo={sParamZo}
                   intermediateTraces={filteredIntermediateTraces}
-                  uncertaintyBands={uncertaintyBands}
+                  uncertaintyBands={filteredUncertaintyBands}
                   visibleStages={visibleStages}
                   setVisibleStages={setVisibleStages}
                   activeStages={activeStages}
-                  dp0Impedance={dp0Impedance}
+                  targetDpTrace={targetDpTrace}
+                  targetDpIndex={targetDpIndex}
+                  setTargetDpIndex={setTargetDpIndex}
+                  targetDpOptions={targetDpOptions}
                   freqUnit={settings.frequencyUnit}
                 />
               </Card>
