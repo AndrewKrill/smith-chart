@@ -414,11 +414,13 @@ function App() {
   }, [tdrSettings.enabled, tdrSettings.mode, tdrSettings.window, effectiveSParamData, tdrEffectiveSynData, sParameters]);
 
   // Per-frequency calibration-path attenuation (auto-computed when cal plane is active).
-  // Uses components on the measurement side of the calibration plane (indices planeDP+1..end).
+  // Uses components on the DUT side of the calibration plane (indices 1..planeDP), i.e. the
+  // path from the DUT (DP0) to the cal plane.  Attenuation along this path raises the effective
+  // noise floor for the DUT measurement and therefore must be included in the uncertainty model.
   const calibrationPathAttenuation_dB = useMemo(() => {
     if (!calSettings.enabled || calSettings.planeDP == null) return null;
     if (!effectiveSParamData) return null;
-    const calibrationPathComps = userCircuit.slice(calSettings.planeDP + 1);
+    const calibrationPathComps = userCircuit.slice(1, calSettings.planeDP + 1);
     if (calibrationPathComps.length === 0) return null;
     const freqs = Object.keys(effectiveSParamData)
       .map(Number)
