@@ -139,7 +139,7 @@ function App() {
   useEffect(() => {
     setTdrSettings((s) => ({
       ...s,
-      gateShape: s.gateShape === "nominal" ? "normal" : (s.gateShape || "normal"),
+      gateShape: s.gateShape === "nominal" ? "normal" : s.gateShape || "normal",
       gateType: s.gateType || (s.gateNotch ? "notch" : "bandpass"),
     }));
   }, []);
@@ -304,15 +304,15 @@ function App() {
     // Synthesize what the VNA would *measure* for each standard by running the
     // standard through the fixture.  Very-large/small R values approximate the
     // ideal Γ = +1 / −1 without requiring special-case math.
-    const OPEN_APPROX_R  = 1e15; // R → ∞  →  Γ ≈ +1  (Open)
+    const OPEN_APPROX_R = 1e15; // R → ∞  →  Γ ≈ +1  (Open)
     const SHORT_APPROX_R = 1e-9; // R → 0   →  Γ ≈ −1  (Short)
-    const openZ  = { real: OPEN_APPROX_R,  imaginary: 0 };
+    const openZ = { real: OPEN_APPROX_R, imaginary: 0 };
     const shortZ = { real: SHORT_APPROX_R, imaginary: 0 };
-    const loadZ  = { real: zo,             imaginary: 0 };
+    const loadZ = { real: zo, imaginary: 0 };
 
-    const measuredOpen  = synthesizeS11FromCircuit([openZ,  ...fixtureComps], frequencies, zo) ?? {};
+    const measuredOpen = synthesizeS11FromCircuit([openZ, ...fixtureComps], frequencies, zo) ?? {};
     const measuredShort = synthesizeS11FromCircuit([shortZ, ...fixtureComps], frequencies, zo) ?? {};
-    const measuredLoad  = synthesizeS11FromCircuit([loadZ,  ...fixtureComps], frequencies, zo) ?? {};
+    const measuredLoad = synthesizeS11FromCircuit([loadZ, ...fixtureComps], frequencies, zo) ?? {};
 
     const result = {};
     for (const fStr of Object.keys(synthesizedSParamData)) {
@@ -321,29 +321,38 @@ function App() {
       // Actual (ideal) standard reflection coefficients at this frequency.
       let openActual, shortActual, loadActual;
       if (calSettings.useIdeal) {
-        openActual  = idealStandards.open;
+        openActual = idealStandards.open;
         shortActual = idealStandards.short;
-        loadActual  = idealStandards.load;
+        loadActual = idealStandards.load;
       } else {
-        openActual  = realisticOpenGamma(f, zo, calSettings.standards?.openParams  || {});
+        openActual = realisticOpenGamma(f, zo, calSettings.standards?.openParams || {});
         shortActual = realisticShortGamma(f, zo, calSettings.standards?.shortParams || {});
-        loadActual  = realisticLoadGamma(f, zo, calSettings.standards?.loadParams  || {});
+        loadActual = realisticLoadGamma(f, zo, calSettings.standards?.loadParams || {});
       }
 
       const standards = {
-        open:  { measured: polarToRectangular(measuredOpen[fStr]?.S11  ?? { magnitude: 1, angle: 0   }), actual: openActual  },
+        open: { measured: polarToRectangular(measuredOpen[fStr]?.S11 ?? { magnitude: 1, angle: 0 }), actual: openActual },
         short: { measured: polarToRectangular(measuredShort[fStr]?.S11 ?? { magnitude: 1, angle: 180 }), actual: shortActual },
-        load:  { measured: polarToRectangular(measuredLoad[fStr]?.S11  ?? { magnitude: 0, angle: 0   }), actual: loadActual  },
+        load: { measured: polarToRectangular(measuredLoad[fStr]?.S11 ?? { magnitude: 0, angle: 0 }), actual: loadActual },
       };
 
       const errorTerms = computeErrorTerms(standards, calSettings.calType || "OSL");
 
       const rawS11Rect = polarToRectangular(synthesizedSParamData[fStr].S11);
-      const corrected  = applyCalibration(rawS11Rect, errorTerms);
+      const corrected = applyCalibration(rawS11Rect, errorTerms);
       result[fStr] = { S11: rectangularToPolar(corrected) };
     }
     return result;
-  }, [calSettings.enabled, calSettings.planeDP, calSettings.calType, calSettings.useIdeal, calSettings.standards, userCircuit, synthesizedSParamData, settings]);
+  }, [
+    calSettings.enabled,
+    calSettings.planeDP,
+    calSettings.calType,
+    calSettings.useIdeal,
+    calSettings.standards,
+    userCircuit,
+    synthesizedSParamData,
+    settings,
+  ]);
 
   // Base synthesized data (before PE): use the cal-corrected view when calibration
   // plane is active, otherwise use the full circuit synthesis.
@@ -407,17 +416,12 @@ function App() {
     if (!effectiveSParamData) return null;
     const calibrationPathComps = userCircuit.slice(calSettings.planeDP + 1);
     if (calibrationPathComps.length === 0) return null;
-    const freqs = Object.keys(effectiveSParamData).map(Number).sort((a, b) => a - b);
+    const freqs = Object.keys(effectiveSParamData)
+      .map(Number)
+      .sort((a, b) => a - b);
     const zo = parseFloat(settings.zo) || 50;
     return computeCalibrationPathAttenuation_dB(calibrationPathComps, freqs, zo);
   }, [calSettings.enabled, calSettings.planeDP, userCircuit, effectiveSParamData, settings.zo]);
-
-  // Uncertainty bands
-  const uncertaintyBands = useMemo(() => {
-    if (!uncertaintySettings.enabled || !effectiveSParamData) return null;
-    const zo = parseFloat(settings.zo) || 50;
-    return computeUncertaintyBands(effectiveSParamData, zo, uncertaintySettings, calibrationPathAttenuation_dB);
-  }, [uncertaintySettings, effectiveSParamData, settings.zo, calibrationPathAttenuation_dB]);
 
   // Port extension length in metres (used by Graph for arc overlay)
   const peLength_m = useMemo(() => {
@@ -450,7 +454,24 @@ function App() {
     const baseData = afterPeData ?? rawSParamData ?? effectiveSynData ?? synthesizedSParamData ?? tdrEffectiveSynData;
     if (!baseData) return null;
     return gatedToSParamFormat(gatedSParamData, baseData);
-  }, [tdrSettings.enabled, tdrSettings.gateEnabled, gatedSParamData, afterPeData, rawSParamData, effectiveSynData, synthesizedSParamData, tdrEffectiveSynData]);
+  }, [
+    tdrSettings.enabled,
+    tdrSettings.gateEnabled,
+    gatedSParamData,
+    afterPeData,
+    rawSParamData,
+    effectiveSynData,
+    synthesizedSParamData,
+    tdrEffectiveSynData,
+  ]);
+
+  // Uncertainty bands (use the most-corrected display data; includes gating when active)
+  const uncertaintyInputData = afterGatingData ?? effectiveSParamData;
+  const uncertaintyBands = useMemo(() => {
+    if (!uncertaintySettings.enabled || !uncertaintyInputData) return null;
+    const zo = parseFloat(settings.zo) || 50;
+    return computeUncertaintyBands(uncertaintyInputData, zo, uncertaintySettings, calibrationPathAttenuation_dB);
+  }, [uncertaintySettings, uncertaintyInputData, settings.zo, calibrationPathAttenuation_dB]);
 
   // Final pipeline circuit: bake in afterGatingData when gating is active, otherwise
   // falls back to correctedUserCircuit (which already has afterPeData).
@@ -510,7 +531,20 @@ function App() {
       afterPe: activeStages.pe ? (afterPeData ?? effectiveSynData) : null,
       afterGating: activeStages.gating ? afterGatingData : null,
     }),
-    [rawSParamData, synthesizedSParamData, activeStages.cal, activeStages.deembed, activeStages.pe, activeStages.gating, afterCalData, calCorrectedSynData, afterDeembedData, afterPeData, effectiveSynData, afterGatingData],
+    [
+      rawSParamData,
+      synthesizedSParamData,
+      activeStages.cal,
+      activeStages.deembed,
+      activeStages.pe,
+      activeStages.gating,
+      afterCalData,
+      calCorrectedSynData,
+      afterDeembedData,
+      afterPeData,
+      effectiveSynData,
+      afterGatingData,
+    ],
   );
 
   const filteredIntermediateTraces = useMemo(() => {
@@ -529,9 +563,10 @@ function App() {
 
       const nearestFrequency = Object.keys(data)
         .map(Number)
-        .reduce((nearest, current) =>
-          Math.abs(current - numericalFrequency) < Math.abs(nearest - numericalFrequency) ? current : nearest,
-        Number.POSITIVE_INFINITY);
+        .reduce(
+          (nearest, current) => (Math.abs(current - numericalFrequency) < Math.abs(nearest - numericalFrequency) ? current : nearest),
+          Number.POSITIVE_INFINITY,
+        );
 
       if (!Number.isFinite(nearestFrequency) || !data[nearestFrequency]) return {};
       return { [nearestFrequency]: data[nearestFrequency] };
@@ -553,7 +588,10 @@ function App() {
 
   // In overlay mode, show the raw/uncorrected trace behind the corrected one —
   // only meaningful when a file is loaded (synthesized data has no separate raw trace).
-  const backgroundSParamData = !splitSmithChart && rawSParamData != null && (activeStages.cal || activeStages.deembed || activeStages.pe || activeStages.gating) ? rawSParamData : null;
+  const backgroundSParamData =
+    !splitSmithChart && rawSParamData != null && (activeStages.cal || activeStages.deembed || activeStages.pe || activeStages.gating)
+      ? rawSParamData
+      : null;
   // console.log("chosenNoiseParameter", chosenNoiseParameter);
 
   const handleSnackbarClick = () => {
@@ -653,7 +691,7 @@ function App() {
                 peLength_m={splitSmithChart ? 0 : peLength_m}
                 peEeff={parseFloat(peSettings.eeff) || 1}
                 peEnabled={splitSmithChart ? false : peSettings.enabled}
-                prePeSynData={splitSmithChart ? null : (sParameters ? null : synBaseData)}
+                prePeSynData={splitSmithChart ? null : sParameters ? null : synBaseData}
                 uncertaintyBands={splitSmithChart ? null : uncertaintyBands}
                 gatedSParamData={splitSmithChart ? null : gatedSParamData}
                 tdrData={tdrData}

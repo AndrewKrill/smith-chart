@@ -15,61 +15,63 @@
  * Reference: Rytting, "Improved RF hardware and calibration methods for network analyzers"
  */
 
-import { polarToRectangular, rectangularToPolar } from "./commonFunctions.js";
+import { polarToRectangular, reflToZ } from "./commonFunctions.js";
 import { realisticOpenGamma, realisticShortGamma, realisticLoadGamma, idealStandards } from "./calibration.js";
+import { synthesizeS11FromCircuit } from "./impedanceFunctions.js";
 
 // ---------------------------------------------------------------------------
 // Calibration-path attenuation (auto-computed from component stackup)
 // ---------------------------------------------------------------------------
 
 /**
- * Estimate the one-way calibration-path attenuation in dB for each frequency,
- * by cascading components between the calibration plane and the measurement point.
+ * Estimate calibration-path attenuation in dB for each frequency using a
+ * sensitivity-based reflection model.
  *
- * For ideal (lossless) transmission lines and lumped elements this returns 0 dB.
- * For a lossy TL with a resistive loss model it returns 2·α·length (two-way).
- *
- * Supported component types:
- *   - "transmissionLine": uses the line's Zo and Eeff to compute the characteristic
- *     impedance mismatch loss.  If the component has a "loss" or "attenuation_dB_m"
- *     field the attenuation is applied as α·length.
- *   - "seriesRes" / "shortedRes": contributes resistive insertion loss.
- *   - All other components: assumed lossless (0 dB contribution).
+ * The method perturbs DUT reflection by a known ΔΓ around the calibration plane,
+ * simulates how strongly that perturbation appears at the VNA port through the
+ * full component stack, and converts the attenuation of this mapping to dB.
+ * This naturally includes the response of all supported components and their
+ * parasitics (ESR/ESL, stubs, transformers, etc.).
  *
  * @param {Array}    calibrationPathComponents - slice of userCircuit on the measurement side of the cal plane
  * @param {number[]} frequencies       - frequencies in Hz
  * @param {number}   zo                - reference impedance (Ω)
- * @returns {number[]} one-way path attenuation in dB, parallel to frequencies array
+ * @returns {number[]} path attenuation in dB, parallel to frequencies array
  */
 export function computeCalibrationPathAttenuation_dB(calibrationPathComponents, frequencies, zo) {
-  if (!calibrationPathComponents || calibrationPathComponents.length === 0 || !frequencies || frequencies.length === 0) {
+  if (!frequencies || frequencies.length === 0) return [];
+  if (!calibrationPathComponents || calibrationPathComponents.length === 0) {
     return frequencies.map(() => 0);
   }
 
-  return frequencies.map(() => {
-    let total_dB = 0;
-    for (const comp of calibrationPathComponents) {
-      if (!comp || !comp.name) continue;
+  // Estimate reflection-path attenuation from DUT-plane Γ sensitivity:
+  // A_dB = -20*log10( |ΔΓ_measured| / |ΔΓ_dut| )
+  // This captures all component responses/parasitics in the calibration path.
+  const gammaHi = 0.2;
+  const gammaLo = -0.2;
+  const deltaGammaDut = Math.abs(gammaHi - gammaLo);
+  const dutHiZ = (zo * (1 + gammaHi)) / (1 - gammaHi);
+  const dutLoZ = (zo * (1 + gammaLo)) / (1 - gammaLo);
 
-      if (comp.name === "transmissionLine" || comp.name === "stub" || comp.name === "shortedStub") {
-        // Lossy TL: attenuation = loss_dB_per_m * length
-        const lengthM = parseFloat(comp.value) * ({ mm: 1e-3, um: 1e-6, m: 1 }[comp.unit] ?? 1);
-        const atten_dB_m = parseFloat(comp.attenuation_dB_m) || 0;
-        if (atten_dB_m > 0 && lengthM > 0) {
-          total_dB += atten_dB_m * lengthM;
-        }
-        // Mismatch loss from TL Zo ≠ zo is negligible for educational use; skip.
-      } else if (comp.name === "seriesRes" || comp.name === "shortedRes") {
-        // Series resistor: insertion loss ≈ R/(R + 2*zo) in power (rough approx for small R)
-        const R = parseFloat(comp.value) || 0;
-        if (R > 0) {
-          const transCoeff = (2 * zo) / (2 * zo + R); // voltage transmission
-          total_dB += -20 * Math.log10(Math.max(transCoeff, 1e-15));
-        }
-      }
-      // Other component types: assume lossless
-    }
-    return total_dB;
+  const path = calibrationPathComponents.filter((c) => !!c);
+  const hiCircuit = [{ name: "blackBox", real: dutHiZ, imaginary: 0 }, ...path];
+  const loCircuit = [{ name: "blackBox", real: dutLoZ, imaginary: 0 }, ...path];
+
+  const hiData = synthesizeS11FromCircuit(hiCircuit, frequencies, zo);
+  const loData = synthesizeS11FromCircuit(loCircuit, frequencies, zo);
+
+  if (!hiData || !loData) return frequencies.map(() => 0);
+
+  return frequencies.map((f) => {
+    const pHi = hiData[String(f)]?.S11;
+    const pLo = loData[String(f)]?.S11;
+    if (!pHi || !pLo) return 0;
+    const gHi = polarToRectangular(pHi);
+    const gLo = polarToRectangular(pLo);
+    const deltaGammaMeasured = Math.hypot(gHi.real - gLo.real, gHi.imaginary - gLo.imaginary);
+    const sensitivity = deltaGammaMeasured / Math.max(deltaGammaDut, 1e-15);
+    const attenuation_dB = -20 * Math.log10(Math.max(sensitivity, 1e-15));
+    return Math.max(0, attenuation_dB);
   });
 }
 
@@ -102,15 +104,9 @@ export function computeResidualErrors(f, zo, realisticParams) {
   const loadReal = realisticLoadGamma(f, zo, realisticParams?.loadParams || {});
 
   // Δ for each standard (magnitude of error vector)
-  const deltaOpen = Math.sqrt(
-    (openReal.real - openIdeal.real) ** 2 + (openReal.imaginary - openIdeal.imaginary) ** 2,
-  );
-  const deltaShort = Math.sqrt(
-    (shortReal.real - shortIdeal.real) ** 2 + (shortReal.imaginary - shortIdeal.imaginary) ** 2,
-  );
-  const deltaLoad = Math.sqrt(
-    (loadReal.real - loadIdeal.real) ** 2 + (loadReal.imaginary - loadIdeal.imaginary) ** 2,
-  );
+  const deltaOpen = Math.sqrt((openReal.real - openIdeal.real) ** 2 + (openReal.imaginary - openIdeal.imaginary) ** 2);
+  const deltaShort = Math.sqrt((shortReal.real - shortIdeal.real) ** 2 + (shortReal.imaginary - shortIdeal.imaginary) ** 2);
+  const deltaLoad = Math.sqrt((loadReal.real - loadIdeal.real) ** 2 + (loadReal.imaginary - loadIdeal.imaginary) ** 2);
 
   // Residual directivity ≈ error in Load standard (since Load → Γ=0 ideally)
   const Ed = deltaLoad;
@@ -136,12 +132,10 @@ export function computeResidualErrors(f, zo, realisticParams) {
  *   noise_Γ = 10^(noiseFloor_dB/20)      (−60 dBc → 0.001)
  *   repeatability_Γ = 10^(repeat_dB/20)  (user-set ±dB)
  *
- *   noise_Γ_eff = noise_Γ / 10^(pathAttenuation_dB/10)
- *     Path attenuation between the calibration plane and the DUT (e.g. a lossy
- *     cable or attenuator) degrades the effective noise floor.  A one-way power
- *     loss of A_dB results in a two-way (round-trip) Γ amplitude loss of A_dB,
- *     so the noise floor Γ grows by the same factor: noise_Γ_eff = noise_Γ / A_lin
- *     where A_lin = 10^(pathAttenuation_dB/10) is the one-way power ratio.
+ *   noise_Γ_eff = noise_Γ * 10^(pathAttenuation_dB/20)
+ *     Path attenuation between the calibration plane and the DUT reduces the
+ *     reflected signal seen by the VNA, so the minimum detectable DUT Γ grows
+ *     by the same amplitude ratio.
  *
  * @param {number} gammaMag - |S11| (linear) at this frequency
  * @param {number} f - frequency in Hz
@@ -170,15 +164,13 @@ export function uncertaintyAtPoint(gammaMag, f, zo, uncertaintySettings) {
   const noise_G_raw = Math.pow(10, noiseFloor_dB / 20);
   const repeat_G = Math.pow(10, repeatability_dB / 20);
 
-  // Path attenuation degrades the noise floor at the DUT. A one-way power
-  // loss of pathAttenuation_dB means the received signal is weaker, so the
-  // minimum detectable Γ grows: noise_G_eff = noise_G_raw / 10^(A_dB/10).
-  // Guard against zero or near-zero path attenuation to avoid division by zero
-  const pathAtten_lin = Math.pow(10, pathAttenuation_dB / 10);
-  const noise_G = noise_G_raw / Math.max(pathAtten_lin, 1e-15); // 1e-15: prevent division by zero
+  // Positive pathAttenuation_dB means weaker reflected signal at the receiver,
+  // therefore larger minimum detectable DUT Γ by the same amplitude factor.
+  const pathAtten_lin = Math.pow(10, pathAttenuation_dB / 20);
+  const noise_G = noise_G_raw * pathAtten_lin;
 
   // Expose the degradation contribution separately for dominant-source reporting
-  const pathAtten_G = noise_G - noise_G_raw;
+  const pathAtten_G = Math.max(0, noise_G - noise_G_raw);
 
   const deltaGamma = Ed + gammaMag * Et + gammaMag * gammaMag * Es + noise_G + repeat_G;
 
@@ -210,6 +202,12 @@ export function uncertaintyAtPoint(gammaMag, f, zo, uncertaintySettings) {
  *   s11_mag_dB: number[],
  *   upper_dB: number[],
  *   lower_dB: number[],
+ *   s11_phase_deg: number[],
+ *   phase_upper_deg: number[],
+ *   phase_lower_deg: number[],
+ *   z_mag_ohm: number[],
+ *   z_upper_ohm: number[],
+ *   z_lower_ohm: number[],
  *   delta_dB: number[],
  *   maxUncertainty_dB: number,
  *   maxUncertainty_f: number,
@@ -218,7 +216,22 @@ export function uncertaintyAtPoint(gammaMag, f, zo, uncertaintySettings) {
  */
 export function computeUncertaintyBands(sparamData, zo, uncertaintySettings, perFreqAttenuation_dB = null) {
   if (!uncertaintySettings || !uncertaintySettings.enabled) {
-    return { freqs: [], s11_mag_dB: [], upper_dB: [], lower_dB: [], delta_dB: [], maxUncertainty_dB: 0, maxUncertainty_f: 0, dominantSource: "none" };
+    return {
+      freqs: [],
+      s11_mag_dB: [],
+      upper_dB: [],
+      lower_dB: [],
+      s11_phase_deg: [],
+      phase_upper_deg: [],
+      phase_lower_deg: [],
+      z_mag_ohm: [],
+      z_upper_ohm: [],
+      z_lower_ohm: [],
+      delta_dB: [],
+      maxUncertainty_dB: 0,
+      maxUncertainty_f: 0,
+      dominantSource: "none",
+    };
   }
 
   const freqs = Object.keys(sparamData)
@@ -227,6 +240,12 @@ export function computeUncertaintyBands(sparamData, zo, uncertaintySettings, per
   const s11_mag_dB = [];
   const upper_dB = [];
   const lower_dB = [];
+  const s11_phase_deg = [];
+  const phase_upper_deg = [];
+  const phase_lower_deg = [];
+  const z_mag_ohm = [];
+  const z_upper_ohm = [];
+  const z_lower_ohm = [];
   const delta_dB = [];
 
   let maxUncertainty_dB = -Infinity;
@@ -242,6 +261,7 @@ export function computeUncertaintyBands(sparamData, zo, uncertaintySettings, per
     const f = freqs[fi];
     const point = sparamData[f];
     const gammaMag = point.S11.magnitude;
+    const gammaAngle = Number(point.S11.angle) || 0;
     const s11dB = 20 * Math.log10(Math.max(gammaMag, 1e-15));
 
     // Per-frequency attenuation overrides the scalar when provided
@@ -259,10 +279,26 @@ export function computeUncertaintyBands(sparamData, zo, uncertaintySettings, per
     const upperDB = 20 * Math.log10(upperMag);
     const lowerDB = 20 * Math.log10(lowerMag);
     const deltadB = upperDB - s11dB;
+    const phaseSpanDeg =
+      gammaMag <= 1e-15 || deltaGamma >= gammaMag ? 180 : (Math.asin(Math.min(1, deltaGamma / Math.max(gammaMag, 1e-15))) * 180) / Math.PI;
+    const phaseLower = Math.max(-180, gammaAngle - phaseSpanDeg);
+    const phaseUpper = Math.min(180, gammaAngle + phaseSpanDeg);
+
+    const zMagAtNominal = Math.hypot(...Object.values(reflToZ(polarToRectangular({ magnitude: gammaMag, angle: gammaAngle }), zo)));
+    const zMagAtUpper = Math.hypot(...Object.values(reflToZ(polarToRectangular({ magnitude: upperMag, angle: gammaAngle }), zo)));
+    const zMagAtLower = Math.hypot(...Object.values(reflToZ(polarToRectangular({ magnitude: lowerMag, angle: gammaAngle }), zo)));
+    const zLower = Math.min(zMagAtUpper, zMagAtLower);
+    const zUpper = Math.max(zMagAtUpper, zMagAtLower);
 
     s11_mag_dB.push(s11dB);
     upper_dB.push(upperDB);
     lower_dB.push(lowerDB);
+    s11_phase_deg.push(gammaAngle);
+    phase_upper_deg.push(phaseUpper);
+    phase_lower_deg.push(phaseLower);
+    z_mag_ohm.push(zMagAtNominal);
+    z_upper_ohm.push(zUpper);
+    z_lower_ohm.push(zLower);
     delta_dB.push(deltadB);
 
     if (deltadB > maxUncertainty_dB) {
@@ -278,7 +314,14 @@ export function computeUncertaintyBands(sparamData, zo, uncertaintySettings, per
   }
 
   // Dominant error source at worst-case frequency
-  const sources = { directivity: maxEd, sourceMatch: maxEs, tracking: maxEt, noise: maxNoise, repeatability: maxRepeat, pathAttenuation: maxPathAtten };
+  const sources = {
+    directivity: maxEd,
+    sourceMatch: maxEs,
+    tracking: maxEt,
+    noise: maxNoise,
+    repeatability: maxRepeat,
+    pathAttenuation: maxPathAtten,
+  };
   const dominantSource = Object.keys(sources).reduce((a, b) => (sources[a] >= sources[b] ? a : b));
 
   return {
@@ -286,6 +329,12 @@ export function computeUncertaintyBands(sparamData, zo, uncertaintySettings, per
     s11_mag_dB,
     upper_dB,
     lower_dB,
+    s11_phase_deg,
+    phase_upper_deg,
+    phase_lower_deg,
+    z_mag_ohm,
+    z_upper_ohm,
+    z_lower_ohm,
     delta_dB,
     maxUncertainty_dB,
     maxUncertainty_f,
