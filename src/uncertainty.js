@@ -29,13 +29,18 @@ const UNCERTAINTY_REFERENCE_IFBW_HZ = 1000;
  * Estimate calibration-path attenuation in dB for each frequency using a
  * sensitivity-based reflection model.
  *
- * The method perturbs DUT reflection by a known ΔΓ around the calibration plane,
- * simulates how strongly that perturbation appears at the VNA port through the
- * full component stack, and converts the attenuation of this mapping to dB.
+ * The method perturbs DUT reflection by a known ΔΓ, simulates how strongly that
+ * perturbation appears at the calibration plane after travelling through the
+ * DUT-side component stack, and converts the attenuation of this mapping to dB.
  * This naturally includes the response of all supported components and their
  * parasitics (ESR/ESL, stubs, transformers, etc.).
  *
- * @param {Array}    calibrationPathComponents - slice of userCircuit on the measurement side of the cal plane
+ * Caller should pass the components that lie between the DUT (DP0) and the
+ * calibration plane — i.e. userCircuit.slice(1, planeDP + 1).  Attenuation along
+ * this path raises the effective noise floor for the DUT measurement because the
+ * reflected DUT signal is attenuated before it reaches the calibration plane.
+ *
+ * @param {Array}    calibrationPathComponents - circuit components between the DUT and the cal plane (DUT-side path)
  * @param {number[]} frequencies       - frequencies in Hz
  * @param {number}   zo                - reference impedance (Ω)
  * @returns {number[]} path attenuation in dB, parallel to frequencies array
