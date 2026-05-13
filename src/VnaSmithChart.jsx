@@ -443,7 +443,7 @@ export default function VnaSmithChart({
   }, [dp0Impedance, zo, width]);
 
   // -------------------------------------------------------------------------
-  // Draw uncertainty ellipses for the most-corrected visible stage
+  // Draw uncertainty bounds as thin solid lines for the most-corrected visible stage
   // -------------------------------------------------------------------------
   useEffect(() => {
     const svg = d3.select(uncertaintyRef.current);
@@ -463,7 +463,7 @@ export default function VnaSmithChart({
     if (stageEntries.length === 0) return;
 
     const refZo = sParamZo || zo;
-    const { freqs, delta_dB } = uncertaintyBands;
+    const { freqs, upper_dB, lower_dB } = uncertaintyBands;
     const stageByFreq = new Map(stageEntries.map(([fStr, point]) => [Number(fStr), point]));
     const stageFreqNums = Array.from(stageByFreq.keys())
       .filter(Number.isFinite)
@@ -488,29 +488,39 @@ export default function VnaSmithChart({
       return Math.abs(targetF - lower) <= Math.abs(upper - targetF) ? lower : upper;
     };
 
+    const upperCoords = [];
+    const lowerCoords = [];
     freqs.forEach((f, i) => {
       const matchedF = matchStageFreq(Number(f));
       if (matchedF === null || matchedF === undefined) return;
       const point = stageByFreq.get(matchedF);
       if (!point?.S11) return;
-      const s11 = polarToRectangular(point.S11);
-      const z = reflToZ(s11, refZo);
-      const [cx, cy] = impedanceToSmithChart(z.real / zo, z.imaginary / zo, width);
-
-      const gammaMag = point.S11.magnitude;
-      const dGamma = gammaMag * (1 - Math.pow(10, -Math.abs(delta_dB[i]) / 20));
-      const r_px = Math.max(2, dGamma * width * 0.5);
-
-      svg
-        .append("ellipse")
-        .attr("cx", cx)
-        .attr("cy", cy)
-        .attr("rx", r_px)
-        .attr("ry", r_px)
-        .attr("fill", "rgba(200,100,0,0.12)")
-        .attr("stroke", "rgba(200,100,0,0.4)")
-        .attr("stroke-width", 1);
+      const baseAngle = point.S11.angle;
+      const upperMag = Math.min(Math.max(Math.pow(10, (upper_dB?.[i] ?? -300) / 20), 1e-15), 1 - 1e-9);
+      const lowerMag = Math.min(Math.max(Math.pow(10, (lower_dB?.[i] ?? -300) / 20), 1e-15), 1 - 1e-9);
+      const upperZ = reflToZ(polarToRectangular({ magnitude: upperMag, angle: baseAngle }), refZo);
+      const lowerZ = reflToZ(polarToRectangular({ magnitude: lowerMag, angle: baseAngle }), refZo);
+      upperCoords.push(impedanceToSmithChart(upperZ.real / zo, upperZ.imaginary / zo, width));
+      lowerCoords.push(impedanceToSmithChart(lowerZ.real / zo, lowerZ.imaginary / zo, width));
     });
+
+    const drawPath = (coords, stroke) => {
+      if (coords.length >= 2) {
+        const d = `M ${coords[0][0]} ${coords[0][1]} ` + coords.slice(1).map((c) => `L ${c[0]} ${c[1]}`).join(" ");
+        svg
+          .append("path")
+          .attr("fill", "none")
+          .attr("stroke", stroke)
+          .attr("stroke-width", 1)
+          .attr("stroke-linecap", "round")
+          .attr("stroke-linejoin", "round")
+          .attr("d", d);
+      } else if (coords.length === 1) {
+        svg.append("circle").attr("cx", coords[0][0]).attr("cy", coords[0][1]).attr("r", 1.5).attr("fill", stroke).attr("stroke", "none");
+      }
+    };
+    drawPath(upperCoords, "rgba(200,100,0,0.75)");
+    drawPath(lowerCoords, "rgba(200,100,0,0.75)");
   }, [zo, sParamZo, width, uncertaintyBands, intermediateTraces, visibleStages]);
 
   // -------------------------------------------------------------------------

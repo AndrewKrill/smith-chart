@@ -110,6 +110,9 @@ const initialUncertaintySettings = {
   noiseFloor_dB: -60,
   repeatability_dB: -50,
   pathAttenuation_dB: 0,
+  ifBandwidthHz: 1000,
+  averagingEnabled: false,
+  averagingCount: 1,
   useIdeal: true,
   realisticParams: {},
 };

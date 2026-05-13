@@ -39,6 +39,7 @@ import { parseInput, parseSIInput, speedOfLight, unitConverter } from "./commonF
 import { frequencyToTimeDomain, applyGate, gateStartStopToCS, gateCsToStartStop, windowInfo, computeTdrResolution } from "./tdr.js";
 import { extensionDelay } from "./portExtension.js";
 import { VNA_STAGES } from "./vnaStages.js";
+import { computeNoiseScaling_dB } from "./uncertainty.js";
 
 // ---------------------------------------------------------------------------
 // Small helpers
@@ -803,6 +804,9 @@ function UncertaintyTab({ uncertaintySettings, setUncertaintySettings, uncertain
   const { t } = useTranslation();
   const us = uncertaintySettings;
   const set = (key, val) => setUncertaintySettings((s) => ({ ...s, [key]: val }));
+  const noiseScaling = computeNoiseScaling_dB(us);
+  const netNoiseAdj_dB = Number(noiseScaling.netAdjustment_dB) || 0;
+  const signedNetNoiseAdj = `${netNoiseAdj_dB >= 0 ? "+" : ""}${netNoiseAdj_dB.toFixed(2)}`;
 
   // Format the worst-case summary from uncertaintyBands
   const HZ_TO_GHZ = 1e9;
@@ -864,6 +868,52 @@ function UncertaintyTab({ uncertaintySettings, setUncertaintySettings, uncertain
             />
           </FieldCell>
         </Row>
+
+        <Row>
+          <LabelCell>{t("vna.unc.ifBandwidth")}</LabelCell>
+          <FieldCell>
+            <TextField
+              size="small"
+              label={t("vna.unc.ifBandwidth")}
+              value={us.ifBandwidthHz ?? 1000}
+              onChange={(e) => set("ifBandwidthHz", parseInput(e.target.value))}
+              slotProps={{ input: { endAdornment: <InputAdornment position="end">Hz</InputAdornment> } }}
+              sx={{ width: 170 }}
+            />
+          </FieldCell>
+        </Row>
+
+        <Row>
+          <LabelCell>{t("vna.unc.averagingEnabled")}</LabelCell>
+          <FieldCell>
+            <FormControlLabel
+              control={<Switch checked={!!us.averagingEnabled} onChange={(e) => set("averagingEnabled", e.target.checked)} />}
+              label={us.averagingEnabled ? t("vna.cal.on") : t("vna.cal.off")}
+            />
+            <TextField
+              size="small"
+              label={t("vna.unc.averagingCount")}
+              value={us.averagingCount ?? 1}
+              onChange={(e) => set("averagingCount", parseInput(e.target.value))}
+              disabled={!us.averagingEnabled}
+              sx={{ width: 150 }}
+            />
+          </FieldCell>
+        </Row>
+
+        <Alert severity="info" sx={{ mt: 1 }}>
+          {t("vna.unc.noiseModelDesc")}
+        </Alert>
+        <Alert severity={Math.abs(netNoiseAdj_dB) < 1e-6 ? "info" : "warning"} sx={{ mt: 1 }}>
+          {Math.abs(netNoiseAdj_dB) < 1e-6
+            ? t("vna.unc.noiseModelNeutral", { ref: noiseScaling.ifBandwidthHz.toFixed(0) })
+            : t("vna.unc.noiseModelSummary", {
+                adj: signedNetNoiseAdj,
+                eff: noiseScaling.effectiveNoiseFloor_dB.toFixed(2),
+                ifbw: noiseScaling.ifBandwidthHz.toFixed(0),
+                n: noiseScaling.averagingCount,
+              })}
+        </Alert>
 
         <Row>
           <LabelCell>{t("vna.unc.pathAttenuation")}</LabelCell>
