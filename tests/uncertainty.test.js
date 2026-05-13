@@ -119,6 +119,17 @@ describe("computeNoiseScaling_dB", () => {
     expect(out.netAdjustment_dB).toBeCloseTo(0, 8);
     expect(out.effectiveNoiseFloor_dB).toBeCloseTo(-60, 8);
   });
+
+  test("clamps invalid averagingCount to 1 when averaging is enabled", () => {
+    const out = computeNoiseScaling_dB({
+      noiseFloor_dB: -60,
+      ifBandwidthHz: 1000,
+      averagingEnabled: true,
+      averagingCount: 0,
+    });
+    expect(out.averagingCount).toBe(1);
+    expect(out.netAdjustment_dB).toBeCloseTo(0, 8);
+  });
 });
 
 // ---------------------------------------------------------------------------
