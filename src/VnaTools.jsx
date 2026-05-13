@@ -799,7 +799,7 @@ function TdrTab({ tdrSettings, setTdrSettings, sparamData, isSynthesized, zo }) 
 // ---------------------------------------------------------------------------
 // Tab 5: Noise Floor & Uncertainty
 // ---------------------------------------------------------------------------
-function UncertaintyTab({ uncertaintySettings, setUncertaintySettings, uncertaintyBands, fixturePathAttenuation_dB, centerFrequency }) {
+function UncertaintyTab({ uncertaintySettings, setUncertaintySettings, uncertaintyBands, calibrationPathAttenuation_dB }) {
   const { t } = useTranslation();
   const us = uncertaintySettings;
   const set = (key, val) => setUncertaintySettings((s) => ({ ...s, [key]: val }));
@@ -816,9 +816,9 @@ function UncertaintyTab({ uncertaintySettings, setUncertaintySettings, uncertain
     : null;
 
   // Auto-computed fixture attenuation summary (median of per-frequency array)
-  const autoPathAtten = fixturePathAttenuation_dB && fixturePathAttenuation_dB.length > 0
+  const autoPathAtten = calibrationPathAttenuation_dB && calibrationPathAttenuation_dB.length > 0
     ? (() => {
-        const sorted = [...fixturePathAttenuation_dB].sort((a, b) => a - b);
+        const sorted = [...calibrationPathAttenuation_dB].sort((a, b) => a - b);
         const mid = Math.floor(sorted.length / 2);
         return sorted[mid];
       })()
@@ -925,7 +925,7 @@ export default function VnaTools({
   uncertaintySettings,
   setUncertaintySettings,
   uncertaintyBands,
-  fixturePathAttenuation_dB,
+  calibrationPathAttenuation_dB,
   sparamData,
   isSynthesized,
   circuitLength,
@@ -1030,7 +1030,7 @@ export default function VnaTools({
         {tab === 3 && (
           <TdrTab tdrSettings={tdrSettings} setTdrSettings={setTdrSettings} sparamData={sparamData} isSynthesized={isSynthesized} zo={zo} />
         )}
-        {tab === 4 && <UncertaintyTab uncertaintySettings={uncertaintySettings} setUncertaintySettings={setUncertaintySettings} uncertaintyBands={uncertaintyBands} fixturePathAttenuation_dB={fixturePathAttenuation_dB} centerFrequency={centerFrequency} />}
+        {tab === 4 && <UncertaintyTab uncertaintySettings={uncertaintySettings} setUncertaintySettings={setUncertaintySettings} uncertaintyBands={uncertaintyBands} calibrationPathAttenuation_dB={calibrationPathAttenuation_dB} />}
       </AccordionDetails>
     </Accordion>
   );

@@ -19,12 +19,12 @@ import { polarToRectangular, rectangularToPolar } from "./commonFunctions.js";
 import { realisticOpenGamma, realisticShortGamma, realisticLoadGamma, idealStandards } from "./calibration.js";
 
 // ---------------------------------------------------------------------------
-// Fixture path attenuation (auto-computed from component stackup)
+// Calibration-path attenuation (auto-computed from component stackup)
 // ---------------------------------------------------------------------------
 
 /**
- * Estimate the one-way fixture path attenuation in dB for each frequency,
- * by cascading the fixture components between the DUT and the calibration plane.
+ * Estimate the one-way calibration-path attenuation in dB for each frequency,
+ * by cascading components between the calibration plane and the measurement point.
  *
  * For ideal (lossless) transmission lines and lumped elements this returns 0 dB.
  * For a lossy TL with a resistive loss model it returns 2·α·length (two-way).
@@ -36,19 +36,19 @@ import { realisticOpenGamma, realisticShortGamma, realisticLoadGamma, idealStand
  *   - "seriesRes" / "shortedRes": contributes resistive insertion loss.
  *   - All other components: assumed lossless (0 dB contribution).
  *
- * @param {Array}    fixtureComponents - slice of userCircuit on the DUT side of the cal plane
+ * @param {Array}    calibrationPathComponents - slice of userCircuit on the measurement side of the cal plane
  * @param {number[]} frequencies       - frequencies in Hz
  * @param {number}   zo                - reference impedance (Ω)
  * @returns {number[]} one-way path attenuation in dB, parallel to frequencies array
  */
-export function computeFixturePathAttenuation_dB(fixtureComponents, frequencies, zo) {
-  if (!fixtureComponents || fixtureComponents.length === 0 || !frequencies || frequencies.length === 0) {
+export function computeCalibrationPathAttenuation_dB(calibrationPathComponents, frequencies, zo) {
+  if (!calibrationPathComponents || calibrationPathComponents.length === 0 || !frequencies || frequencies.length === 0) {
     return frequencies.map(() => 0);
   }
 
-  return frequencies.map((f) => {
+  return frequencies.map(() => {
     let total_dB = 0;
-    for (const comp of fixtureComponents) {
+    for (const comp of calibrationPathComponents) {
       if (!comp || !comp.name) continue;
 
       if (comp.name === "transmissionLine" || comp.name === "stub" || comp.name === "shortedStub") {
@@ -72,6 +72,9 @@ export function computeFixturePathAttenuation_dB(fixtureComponents, frequencies,
     return total_dB;
   });
 }
+
+// Backward-compatible alias
+export const computeFixturePathAttenuation_dB = computeCalibrationPathAttenuation_dB;
 
 // ---------------------------------------------------------------------------
 // Residual error computation

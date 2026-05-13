@@ -351,7 +351,9 @@
       "desc": "Bandes d'incertitude sur les graphiques S11 et ellipses sur l'abaque.",
       "plotTitle": "S11 ±incertitude",
       "maxUnc": "Incertitude max : ±{{v}} dB à {{f}} {{unit}} (dominante : {{src}})",
-      "pathAttenuation": "Atténuation du chemin de connexion"
+      "pathAttenuation": "Atténuation du chemin de calibration",
+      "autoPathAtten": "Auto : {{v}} dB (depuis le chemin de calibration)",
+      "autoPathAttenDesc": "L’atténuation du chemin de calibration est calculée automatiquement du plan de calibration jusqu’au point de mesure (à droite du dernier composant DPn). Le champ manuel est désactivé tant que le plan de calibration est actif."
     },
     "pipeline": {
       "splitChart": "Show corrections on second chart",

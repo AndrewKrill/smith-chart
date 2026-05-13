@@ -280,13 +280,27 @@ function sparamToTraceArrays(sparamData, freqUnit, zo) {
     zMagArr.push(Math.sqrt(zRe * zRe + zIm * zIm));
     zAngArr.push(Math.atan2(zIm, zRe) * 180 / Math.PI);
   }
-  return { fAxis, s11dBArr, s11AngArr, zMagArr, zAngArr };
+  return { fAxis, freqKeys: sortedFreqs, s11dBArr, s11AngArr, zMagArr, zAngArr };
+}
+
+function uncertaintySeriesForFreqKeys(uncertaintyBands, freqKeys) {
+  if (!uncertaintyBands || !uncertaintyBands.freqs || uncertaintyBands.freqs.length === 0 || !freqKeys || freqKeys.length === 0) return null;
+  const upperMap = new Map();
+  const lowerMap = new Map();
+  uncertaintyBands.freqs.forEach((f, i) => {
+    upperMap.set(Number(f), uncertaintyBands.upper_dB?.[i]);
+    lowerMap.set(Number(f), uncertaintyBands.lower_dB?.[i]);
+  });
+  const upper = freqKeys.map((f) => upperMap.get(Number(f)) ?? null);
+  const lower = freqKeys.map((f) => lowerMap.get(Number(f)) ?? null);
+  if (upper.every((v) => v == null) || lower.every((v) => v == null)) return null;
+  return { upper, lower };
 }
 
 // ---------------------------------------------------------------------------
 // Intermediate-stage overlay charts for |S11| (dB), ∠S11 (°), |Z| (Ω), and ∠Z (°)
 // ---------------------------------------------------------------------------
-function IntermediateTracesPlots({ intermediateTraces, activeStages, sParamZo, freqUnit, commonOptions }) {
+function IntermediateTracesPlots({ intermediateTraces, activeStages, sParamZo, freqUnit, commonOptions, uncertaintyBands }) {
   const { t } = useTranslation();
   if (!intermediateTraces || !activeStages) return null;
 
@@ -318,7 +332,7 @@ function IntermediateTracesPlots({ intermediateTraces, activeStages, sParamZo, f
   if (!fAxis || fAxis.length === 0) return null;
 
   // Helper: build a uPlot series/data pair for a given array extractor
-  function buildChart(yLabel, extractor) {
+  function buildChart(yLabel, extractor, includeUncertainty = false) {
     const series = [{ label: `Freq (${freqUnit})` }];
     const data = [fAxis];
     stagesWithData.forEach((stage, i) => {
@@ -338,10 +352,20 @@ function IntermediateTracesPlots({ intermediateTraces, activeStages, sParamZo, f
       axes: [{ label: `Freq (${freqUnit})` }, { scale: "y", label: yLabel }],
       scales: { x: { time: false }, y: { auto: true } },
     };
+    if (includeUncertainty) {
+      const unc = uncertaintySeriesForFreqKeys(uncertaintyBands, traceArraysByStage[0].freqKeys);
+      if (unc) {
+        options.series.push(
+          { label: "+unc (dB)", stroke: "rgba(255,80,0,0.7)", width: 1, scale: "y", dash: [4, 3] },
+          { label: "−unc (dB)", stroke: "rgba(255,80,0,0.7)", width: 1, scale: "y", fill: "rgba(255,80,0,0.15)", dash: [4, 3] },
+        );
+        data.push(unc.upper, unc.lower);
+      }
+    }
     return { options, data };
   }
 
-  const s11dB  = buildChart(t("results.s11db"),  "s11dBArr");
+  const s11dB  = buildChart(t("results.s11db"),  "s11dBArr", true);
   const s11Ang = buildChart(t("results.s11ang"), "s11AngArr");
   const zMag   = buildChart(t("results.zMag"),   "zMagArr");
   const zAng   = buildChart(t("results.zAng"),   "zAngArr");
@@ -359,7 +383,7 @@ function IntermediateTracesPlots({ intermediateTraces, activeStages, sParamZo, f
   );
 }
 
-function SPlot({ sparametersData, options, freqUnit, title }) {
+function SPlot({ sparametersData, options, freqUnit, title, uncertaintyBands }) {
   const { t } = useTranslation();
   if (!sparametersData || sparametersData.length === 0) return null;
   return ["S11", "S12", "S21", "S22"].map((s) => {
@@ -369,15 +393,26 @@ function SPlot({ sparametersData, options, freqUnit, title }) {
     sParamOpt.series[2].label = `∠ ${s} |(°)`;
     sParamOpt.axes[1].label = `| ${s} | (dB)`;
     sParamOpt.axes[2].label = `∠ ${s} |(°)`;
+    const sortedFreq = Object.keys(sparametersData).sort((a, b) => a - b);
     const f = [];
     const m = [];
     const a = [];
-    for (const fx in sparametersData) {
+    for (const fx of sortedFreq) {
       f.push(fx / unitConverter[freqUnit]);
       m.push(20 * Math.log10(sparametersData[fx][s].magnitude));
       a.push(sparametersData[fx][s].angle);
     }
     const sData = [f, m, a];
+    if (s === "S11") {
+      const unc = uncertaintySeriesForFreqKeys(uncertaintyBands, sortedFreq);
+      if (unc) {
+        sParamOpt.series.push(
+          { label: "+unc (dB)", stroke: "rgba(255,80,0,0.7)", width: 1, scale: "y", dash: [4, 3] },
+          { label: "−unc (dB)", stroke: "rgba(255,80,0,0.7)", width: 1, scale: "y", fill: "rgba(255,80,0,0.15)", dash: [4, 3] },
+        );
+        sData.push(unc.upper, unc.lower);
+      }
+    }
     return (
       <div style={{ textAlign: "center" }} key={s}>
         <h5 style={{ marginTop: 15, marginBottom: 0 }}>
@@ -389,7 +424,7 @@ function SPlot({ sparametersData, options, freqUnit, title }) {
   });
 }
 /** plotKind "z": |Z| (Ω) + ∠Z (°) from rectangularToPolar(z); "s11": |Γ| dB + phase via processImpedance; "s21": |S21| dB (|S11|²+|S21|²=1). */
-function SpanTolerancePlot({ spanResultsByTol, options, freqUnit, zo, plotKind, legendY }) {
+function SpanTolerancePlot({ spanResultsByTol, options, freqUnit, zo, plotKind, legendY, uncertaintyBands }) {
   const { t } = useTranslation();
   const dualY = plotKind === "s11" || plotKind === "z";
   if (!spanResultsByTol || spanResultsByTol.length === 0) return null;
@@ -467,6 +502,16 @@ function SpanTolerancePlot({ spanResultsByTol, options, freqUnit, zo, plotKind, 
     }
   }
   const gData = [fAxis, ...seriesData];
+  if (plotKind === "s11") {
+    const unc = uncertaintySeriesForFreqKeys(uncertaintyBands, sortedFreq);
+    if (unc) {
+      sParamOpt.series.push(
+        { label: "+unc (dB)", stroke: "rgba(255,80,0,0.7)", width: 1, scale: "y", dash: [4, 3] },
+        { label: "−unc (dB)", stroke: "rgba(255,80,0,0.7)", width: 1, scale: "y", fill: "rgba(255,80,0,0.15)", dash: [4, 3] },
+      );
+      gData.push(unc.upper, unc.lower);
+    }
+  }
   return <UplotReact options={sParamOpt} data={gData} />;
 }
 function GainPlot({ gain, options, freqUnit, title, legend }) {
@@ -497,16 +542,17 @@ function GainPlot({ gain, options, freqUnit, title, legend }) {
     </div>
   );
 }
-function RPlot({ RefIn, options, freqUnit, title }) {
+function RPlot({ RefIn, options, freqUnit, title, uncertaintyBands }) {
   const { t } = useTranslation();
   if (!RefIn || Object.keys(RefIn).length === 0) return null;
   const sParamOpt = JSON.parse(JSON.stringify(options));
   // const f = [];
-  const plotData = [Object.keys(RefIn[0]).map((x) => x / unitConverter[freqUnit])];
+  const sortedFreq = Object.keys(RefIn[0]).sort((a, b) => a - b);
+  const plotData = [sortedFreq.map((x) => x / unitConverter[freqUnit])];
   for (const i in RefIn) {
     const m = [];
     const a = [];
-    for (const v in RefIn[i]) {
+    for (const v of sortedFreq) {
       m.push(20 * Math.log10(RefIn[i][v].magnitude));
       a.push(RefIn[i][v].angle);
     }
@@ -526,50 +572,19 @@ function RPlot({ RefIn, options, freqUnit, title }) {
       },
     );
   }
+  const unc = uncertaintySeriesForFreqKeys(uncertaintyBands, sortedFreq);
+  if (unc) {
+    sParamOpt.series.push(
+      { label: "+unc (dB)", stroke: "rgba(255,80,0,0.7)", width: 1, scale: "y", dash: [4, 3] },
+      { label: "−unc (dB)", stroke: "rgba(255,80,0,0.7)", width: 1, scale: "y", fill: "rgba(255,80,0,0.15)", dash: [4, 3] },
+    );
+    plotData.push(unc.upper, unc.lower);
+  }
   return (
     <div style={{ textAlign: "center" }}>
       <h5 style={{ marginTop: 15, marginBottom: 0 }}>{title}</h5>
       <UplotReact options={sParamOpt} data={plotData} />
     </div>
-  );
-}
-
-/**
- * UncertaintyPlot: renders ±uncertainty bands as shaded areas on an S11 magnitude plot.
- * Uses a canvas overlay approach through uPlot's hooks.
- */
-function UncertaintyPlot({ uncertaintyBands, options, freqUnit }) {
-  const { t } = useTranslation();
-  if (!uncertaintyBands || !uncertaintyBands.freqs || uncertaintyBands.freqs.length === 0) return null;
-
-  const { freqs, s11_mag_dB, upper_dB, lower_dB, maxUncertainty_dB, maxUncertainty_f, dominantSource } = uncertaintyBands;
-  const fAxis = freqs.map((f) => f / unitConverter[freqUnit]);
-
-  const opt = JSON.parse(JSON.stringify(options));
-  // Nominal S11 series
-  opt.series.push({ label: "|S11| (dB)", stroke: "blue", width: 2, scale: "y" });
-  // Upper bound
-  opt.series.push({ label: "+unc (dB)", stroke: "rgba(255,80,0,0.7)", width: 1, scale: "y", dash: [4, 3] });
-  // Lower bound
-  opt.series.push({ label: "−unc (dB)", stroke: "rgba(255,80,0,0.7)", width: 1, scale: "y", fill: "rgba(255,80,0,0.15)", dash: [4, 3] });
-
-  const data = [fAxis, s11_mag_dB, upper_dB, lower_dB];
-
-  return (
-    <Box sx={{ mt: 2 }}>
-      <Typography variant="subtitle2" sx={{ mb: 0.5 }}>
-        {t("vna.unc.plotTitle")}
-      </Typography>
-      <UplotReact options={opt} data={data} />
-      <Typography variant="caption" color="text.secondary">
-        {t("vna.unc.maxUnc", {
-          v: maxUncertainty_dB.toFixed(2),
-          f: (maxUncertainty_f / unitConverter[freqUnit]).toPrecision(4),
-          unit: freqUnit,
-          src: dominantSource,
-        })}
-      </Typography>
-    </Box>
   );
 }
 
@@ -689,14 +704,14 @@ export default function Results({ zProc, spanResults, freqUnit, plotType, sParam
     const sparametersData = sParameters.data;
     return (
       <div ref={containerRef} style={{ width: "100%", marginTop: "30px" }}>
-        <SPlot sparametersData={sparametersData} options={options4} freqUnit={freqUnit} title={t("results.rawData")} />
-        <UncertaintyPlot uncertaintyBands={uncertaintyBands} options={optionsS11} freqUnit={freqUnit} />
+        <SPlot sparametersData={sparametersData} options={options4} freqUnit={freqUnit} title={t("results.rawData")} uncertaintyBands={uncertaintyBands} />
         <IntermediateTracesPlots
           intermediateTraces={intermediateTraces}
           activeStages={activeStages}
           sParamZo={sParamZo ?? zo}
           freqUnit={freqUnit}
           commonOptions={commonOptions}
+          uncertaintyBands={uncertaintyBands}
         />
       </div>
     );
@@ -705,14 +720,14 @@ export default function Results({ zProc, spanResults, freqUnit, plotType, sParam
   } else if (plotType !== "sparam" && sParameters !== null) {
     return (
       <div ref={containerRef} style={{ width: "100%", marginTop: "30px" }}>
-        <RPlot RefIn={RefIn} options={optionsS11} freqUnit={freqUnit} title={t("results.zDp1")} />
-        <UncertaintyPlot uncertaintyBands={uncertaintyBands} options={optionsS11} freqUnit={freqUnit} />
+        <RPlot RefIn={RefIn} options={optionsS11} freqUnit={freqUnit} title={t("results.zDp1")} uncertaintyBands={uncertaintyBands} />
         <IntermediateTracesPlots
           intermediateTraces={intermediateTraces}
           activeStages={activeStages}
           sParamZo={sParamZo ?? zo}
           freqUnit={freqUnit}
           commonOptions={commonOptions}
+          uncertaintyBands={uncertaintyBands}
         />
         <GainPlot gain={gainResults} options={optionsGain} freqUnit={freqUnit} title={t("results.systemGain")} legend={t("results.gainLegend")} />
         <GainPlot gain={noiseArray} options={optionsGain} freqUnit={freqUnit} title={t("results.noiseFigure")} legend={t("results.nfLegend")} />
@@ -743,14 +758,14 @@ export default function Results({ zProc, spanResults, freqUnit, plotType, sParam
 
         <div ref={containerRef} style={{ width: "100%", marginTop: "30px" }}>
           <SpanTolerancePlot spanResultsByTol={spanResults} options={optionsZTol} freqUnit={freqUnit} zo={zo} plotKind="z" />
-          <SpanTolerancePlot spanResultsByTol={spanResults} options={optionsS11Tol} freqUnit={freqUnit} zo={zo} plotKind="s11" />
-          <UncertaintyPlot uncertaintyBands={uncertaintyBands} options={optionsS11} freqUnit={freqUnit} />
+          <SpanTolerancePlot spanResultsByTol={spanResults} options={optionsS11Tol} freqUnit={freqUnit} zo={zo} plotKind="s11" uncertaintyBands={uncertaintyBands} />
           <IntermediateTracesPlots
             intermediateTraces={intermediateTraces}
             activeStages={activeStages}
             sParamZo={sParamZo ?? zo}
             freqUnit={freqUnit}
             commonOptions={commonOptions}
+            uncertaintyBands={uncertaintyBands}
           />
           <Typography sx={{ textAlign: "center", mt: 2 }}>
             {t("results.assuming")}{" "}

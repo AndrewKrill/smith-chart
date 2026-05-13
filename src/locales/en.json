@@ -351,12 +351,12 @@
       "enabled": "Uncertainty enabled",
       "noiseFloor": "Noise floor",
       "repeatability": "Cable/connector repeatability",
-      "desc": "Uncertainty bands (shaded) are shown on all S11 magnitude plots and as ellipses around frequency points on the Smith chart. Dominant error source and worst-case uncertainty are summarised below each plot.",
+      "desc": "Uncertainty bands (shaded) are shown on all S11 magnitude plots and as ellipses around frequency points on Smith charts. This uncertainty model applies to S11-derived plots only.",
       "plotTitle": "S11 with ±Uncertainty Bands",
       "maxUnc": "Max uncertainty: ±{{v}} dB at {{f}} {{unit}} (dominant: {{src}})",
-      "pathAttenuation": "Fixture path attenuation",
-      "autoPathAtten": "Auto: {{v}} dB (from fixture)",
-      "autoPathAttenDesc": "Path attenuation is auto-computed from the fixture component stackup between the DUT and the calibration plane. The manual field is disabled while calibration plane is active."
+      "pathAttenuation": "Calibration path attenuation",
+      "autoPathAtten": "Auto: {{v}} dB (from calibration path)",
+      "autoPathAttenDesc": "Calibration path attenuation is auto-computed from the calibration plane to the measurement point (to the right of the last component DPn). The manual field is disabled while the calibration plane is active."
     },
     "pipeline": {
       "splitChart": "Show corrections on second chart",

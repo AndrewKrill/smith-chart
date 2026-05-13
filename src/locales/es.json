@@ -351,7 +351,9 @@
       "desc": "Las bandas de incertidumbre se muestran en los gráficos de |S11| y como elipses en la carta de Smith.",
       "plotTitle": "S11 con bandas de ±incertidumbre",
       "maxUnc": "Incertidumbre máx.: ±{{v}} dB a {{f}} {{unit}} (dominante: {{src}})",
-      "pathAttenuation": "Atenuación del trayecto de acceso"
+      "pathAttenuation": "Atenuación de la ruta de calibración",
+      "autoPathAtten": "Auto: {{v}} dB (desde la ruta de calibración)",
+      "autoPathAttenDesc": "La atenuación de la ruta de calibración se calcula automáticamente desde el plano de calibración hasta el punto de medida (a la derecha del último componente DPn). El campo manual se desactiva mientras el plano de calibración está activo."
     },
     "pipeline": {
       "splitChart": "Show corrections on second chart",
