@@ -34,6 +34,11 @@ import MenuItem from "@mui/material/MenuItem";
 
 import { polarToRectangular, reflToZ, processImpedance, parseInput, unitConverter } from "./commonFunctions.js";
 import { VNA_STAGES } from "./vnaStages.js";
+import {
+  UNCERTAINTY_FILL,
+  UNCERTAINTY_STROKE,
+  buildUncertaintyPathStr,
+} from "./uncertaintyRender.js";
 
 // ---------------------------------------------------------------------------
 // Pipeline stage colour / dash definitions — imported from shared module
@@ -69,104 +74,6 @@ function smithCoordinatesToImpedance(x, y) {
 function impedanceToSmithChart(re, im, width) {
   const [x, y] = impedanceToSmithCoordinates(re, im);
   return [Number((x * width * 0.5).toFixed(1)), Number((y * width * 0.5).toFixed(1))];
-}
-
-// ---------------------------------------------------------------------------
-// Uncertainty region helpers — convert Γ-plane circles to Smith chart paths
-// ---------------------------------------------------------------------------
-const UNCERTAINTY_CIRCLE_SAMPLES = 36;
-const UNCERTAINTY_CAP_SAMPLES = 8;
-const UNCERTAINTY_FILL = "rgba(200,100,0,0.15)";
-const UNCERTAINTY_STROKE = "rgba(200,100,0,0.75)";
-
-// Convert Γ = (gr, gi) to Smith chart pixel coords [x, y].
-// Returns null when the point lies on or outside the unit circle boundary.
-function gammaToSmithXY(gr, gi, refZo, displayZo, width) {
-  if (gr * gr + gi * gi >= 1 - 1e-6) return null;
-  const z = reflToZ({ real: gr, imaginary: gi }, refZo);
-  return impedanceToSmithChart(z.real / displayZo, z.imaginary / displayZo, width);
-}
-
-// Sample an arc of the uncertainty circle in Γ-space from fromG to toG,
-// choosing the arc that passes through throughAngle.
-// Returns an array of [x, y] pixel coords (null entries excluded).
-function sampleUncertaintyArc(center, radius, fromG, toG, throughAngle, refZo, displayZo, width) {
-  const fromAngle = Math.atan2(fromG.gi - center.gi, fromG.gr - center.gr);
-  const toAngle = Math.atan2(toG.gi - center.gi, toG.gr - center.gr);
-  const norm = (a) => ((a % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);
-  const fa = norm(fromAngle);
-  const ta = norm(toAngle);
-  const wa = norm(throughAngle);
-  const ccwFaToTa = (ta - fa + 2 * Math.PI) % (2 * Math.PI);
-  const ccwFaToWa = (wa - fa + 2 * Math.PI) % (2 * Math.PI);
-  const span = ccwFaToWa < ccwFaToTa ? ccwFaToTa : -(2 * Math.PI - ccwFaToTa);
-  const result = [];
-  for (let k = 1; k < UNCERTAINTY_CAP_SAMPLES; k++) {
-    const theta = fromAngle + (span * k) / UNCERTAINTY_CAP_SAMPLES;
-    const xy = gammaToSmithXY(center.gr + radius * Math.cos(theta), center.gi + radius * Math.sin(theta), refZo, displayZo, width);
-    if (xy) result.push(xy);
-  }
-  return result;
-}
-
-// Build the SVG path string for the uncertainty region.
-// pts: [{gr, gi, dG}] — Γ-plane center and uncertainty radius per frequency.
-// Returns null if there is nothing drawable.
-function buildUncertaintyPathStr(pts, refZo, displayZo, width) {
-  const valid = pts.filter((p) => p.dG > 1e-9);
-  if (valid.length === 0) return null;
-  const toXY = (gr, gi) => gammaToSmithXY(gr, gi, refZo, displayZo, width);
-
-  if (valid.length === 1) {
-    // Single point: full circle in Γ-plane → ellipse on Smith chart
-    const { gr, gi, dG } = valid[0];
-    const coords = [];
-    for (let k = 0; k <= UNCERTAINTY_CIRCLE_SAMPLES; k++) {
-      const theta = (2 * Math.PI * k) / UNCERTAINTY_CIRCLE_SAMPLES;
-      const xy = toXY(gr + dG * Math.cos(theta), gi + dG * Math.sin(theta));
-      if (xy) coords.push(xy);
-    }
-    if (coords.length < 3) return null;
-    return `M ${coords[0][0]} ${coords[0][1]}` + coords.slice(1).map((c) => ` L ${c[0]} ${c[1]}`).join("") + " Z";
-  }
-
-  // Multiple points: perpendicular offsets in Γ-space form a tube
-  const N = valid.length;
-  const tangents = valid.map((p, i) => {
-    const prev = valid[Math.max(0, i - 1)];
-    const next = valid[Math.min(N - 1, i + 1)];
-    const dx = next.gr - prev.gr;
-    const dy = next.gi - prev.gi;
-    const len = Math.hypot(dx, dy) || 1;
-    return { tx: dx / len, ty: dy / len };
-  });
-  // Upper side: rotate tangent +90° → perp = (-ty, tx)
-  const upperG = valid.map((p, i) => ({ gr: p.gr - tangents[i].ty * p.dG, gi: p.gi + tangents[i].tx * p.dG }));
-  // Lower side: rotate tangent -90° → perp = (ty, -tx)
-  const lowerG = valid.map((p, i) => ({ gr: p.gr + tangents[i].ty * p.dG, gi: p.gi - tangents[i].tx * p.dG }));
-
-  const upperXY = upperG.map((g) => toXY(g.gr, g.gi));
-  const lowerXY = lowerG.map((g) => toXY(g.gr, g.gi));
-
-  // Semicircular end caps
-  const startCap = sampleUncertaintyArc(
-    valid[0], valid[0].dG, lowerG[0], upperG[0],
-    Math.atan2(-tangents[0].ty, -tangents[0].tx), refZo, displayZo, width,
-  );
-  const endCap = sampleUncertaintyArc(
-    valid[N - 1], valid[N - 1].dG, upperG[N - 1], lowerG[N - 1],
-    Math.atan2(tangents[N - 1].ty, tangents[N - 1].tx), refZo, displayZo, width,
-  );
-
-  // Closed path: upper → end-cap → lower (reversed) → start-cap
-  const allCoords = [
-    ...upperXY.filter(Boolean),
-    ...endCap,
-    ...[...lowerXY.filter(Boolean)].reverse(),
-    ...startCap,
-  ];
-  if (allCoords.length < 3) return null;
-  return `M ${allCoords[0][0]} ${allCoords[0][1]}` + allCoords.slice(1).map((c) => ` L ${c[0]} ${c[1]}`).join("") + " Z";
 }
 
 function resistanceToXYR(z) {
