@@ -1,5 +1,11 @@
 import { expect, test, describe } from "vitest";
-import { computeUncertaintyBands, uncertaintyAtPoint, computeResidualErrors, computeCalibrationPathAttenuation_dB } from "../src/uncertainty.js";
+import {
+  computeUncertaintyBands,
+  uncertaintyAtPoint,
+  computeResidualErrors,
+  computeCalibrationPathAttenuation_dB,
+  computeNoiseScaling_dB,
+} from "../src/uncertainty.js";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -61,6 +67,68 @@ describe("uncertaintyAtPoint", () => {
     });
     expect(repeat_G).toBeCloseTo(0.01, 4);
     expect(deltaGamma).toBeGreaterThanOrEqual(repeat_G);
+  });
+
+  test("higher IF bandwidth increases effective noise", () => {
+    const lowIfbw = uncertaintyAtPoint(0, 1e9, 50, {
+      noiseFloor_dB: -60,
+      repeatability_dB: -120,
+      ifBandwidthHz: 100,
+      averagingEnabled: false,
+      useIdeal: true,
+    });
+    const highIfbw = uncertaintyAtPoint(0, 1e9, 50, {
+      noiseFloor_dB: -60,
+      repeatability_dB: -120,
+      ifBandwidthHz: 10000,
+      averagingEnabled: false,
+      useIdeal: true,
+    });
+    expect(highIfbw.noise_G).toBeGreaterThan(lowIfbw.noise_G);
+  });
+
+  test("averaging reduces effective noise when enabled", () => {
+    const noAvg = uncertaintyAtPoint(0, 1e9, 50, {
+      noiseFloor_dB: -60,
+      repeatability_dB: -120,
+      ifBandwidthHz: 1000,
+      averagingEnabled: false,
+      averagingCount: 16,
+      useIdeal: true,
+    });
+    const avg = uncertaintyAtPoint(0, 1e9, 50, {
+      noiseFloor_dB: -60,
+      repeatability_dB: -120,
+      ifBandwidthHz: 1000,
+      averagingEnabled: true,
+      averagingCount: 16,
+      useIdeal: true,
+    });
+    expect(avg.noise_G).toBeLessThan(noAvg.noise_G);
+  });
+});
+
+describe("computeNoiseScaling_dB", () => {
+  test("is neutral at reference IFBW with averaging disabled", () => {
+    const out = computeNoiseScaling_dB({
+      noiseFloor_dB: -60,
+      ifBandwidthHz: 1000,
+      averagingEnabled: false,
+      averagingCount: 32,
+    });
+    expect(out.netAdjustment_dB).toBeCloseTo(0, 8);
+    expect(out.effectiveNoiseFloor_dB).toBeCloseTo(-60, 8);
+  });
+
+  test("clamps invalid averagingCount to 1 when averaging is enabled", () => {
+    const out = computeNoiseScaling_dB({
+      noiseFloor_dB: -60,
+      ifBandwidthHz: 1000,
+      averagingEnabled: true,
+      averagingCount: 0,
+    });
+    expect(out.averagingCount).toBe(1);
+    expect(out.netAdjustment_dB).toBeCloseTo(0, 8);
   });
 });
 

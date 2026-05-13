@@ -19,6 +19,8 @@ import { polarToRectangular, reflToZ } from "./commonFunctions.js";
 import { realisticOpenGamma, realisticShortGamma, realisticLoadGamma, idealStandards } from "./calibration.js";
 import { synthesizeS11FromCircuit } from "./impedanceFunctions.js";
 
+const UNCERTAINTY_REFERENCE_IFBW_HZ = 1000;
+
 // ---------------------------------------------------------------------------
 // Calibration-path attenuation (auto-computed from component stackup)
 // ---------------------------------------------------------------------------
@@ -126,6 +128,32 @@ export function computeResidualErrors(f, zo, realisticParams) {
 // Per-frequency uncertainty magnitude
 // ---------------------------------------------------------------------------
 
+function toPositiveFinite(val, fallback) {
+  const n = Number(val);
+  return Number.isFinite(n) && n > 0 ? n : fallback;
+}
+
+export function computeNoiseScaling_dB(uncertaintySettings = {}) {
+  const ifBandwidthHz = toPositiveFinite(uncertaintySettings.ifBandwidthHz, UNCERTAINTY_REFERENCE_IFBW_HZ);
+  const averagingEnabled = !!uncertaintySettings.averagingEnabled;
+  const averagingCount = averagingEnabled ? Math.max(1, Math.round(toPositiveFinite(uncertaintySettings.averagingCount, 1))) : 1;
+  const ifbwAdjustment_dB = 10 * Math.log10(ifBandwidthHz / UNCERTAINTY_REFERENCE_IFBW_HZ);
+  const averagingAdjustment_dB = averagingEnabled ? -10 * Math.log10(averagingCount) : 0;
+  const netAdjustment_dB = ifbwAdjustment_dB + averagingAdjustment_dB;
+  const baseNoiseFloor_dB = Number(uncertaintySettings.noiseFloor_dB ?? -60);
+  const effectiveNoiseFloor_dB = baseNoiseFloor_dB + netAdjustment_dB;
+  return {
+    ifBandwidthHz,
+    averagingEnabled,
+    averagingCount,
+    ifbwAdjustment_dB,
+    averagingAdjustment_dB,
+    netAdjustment_dB,
+    baseNoiseFloor_dB,
+    effectiveNoiseFloor_dB,
+  };
+}
+
 /**
  * Compute worst-case uncertainty magnitude on |S11| at one frequency point.
  *
@@ -134,6 +162,10 @@ export function computeResidualErrors(f, zo, realisticParams) {
  * where:
  *   noise_Γ = 10^(noiseFloor_dB/20)      (−60 dBc → 0.001)
  *   repeatability_Γ = 10^(repeat_dB/20)  (user-set ±dB)
+ *
+ *   effectiveNoiseFloor_dB = noiseFloor_dB
+ *                          + 10*log10(IFBW / IFBW_ref)
+ *                          - 10*log10(Navg)  (when averaging is enabled)
  *
  *   noise_Γ_eff = noise_Γ * 10^(pathAttenuation_dB/20)
  *     Path attenuation between the calibration plane and the DUT reduces the
@@ -147,6 +179,9 @@ export function computeResidualErrors(f, zo, realisticParams) {
  *   noiseFloor_dB: number,
  *   repeatability_dB: number,
  *   pathAttenuation_dB: number,
+ *   ifBandwidthHz: number,
+ *   averagingEnabled: boolean,
+ *   averagingCount: number,
  *   useIdeal: boolean,
  *   realisticParams: Object
  * }} uncertaintySettings
@@ -155,7 +190,8 @@ export function computeResidualErrors(f, zo, realisticParams) {
  * (noise_G is the effective noise floor Γ after applying path attenuation)
  */
 export function uncertaintyAtPoint(gammaMag, f, zo, uncertaintySettings) {
-  const { noiseFloor_dB = -60, repeatability_dB = -50, pathAttenuation_dB = 0, useIdeal = true, realisticParams = {} } = uncertaintySettings || {};
+  const { repeatability_dB = -50, pathAttenuation_dB = 0, useIdeal = true, realisticParams = {} } = uncertaintySettings || {};
+  const { effectiveNoiseFloor_dB } = computeNoiseScaling_dB(uncertaintySettings);
 
   let Ed = 0;
   let Es = 0;
@@ -164,7 +200,7 @@ export function uncertaintyAtPoint(gammaMag, f, zo, uncertaintySettings) {
     ({ Ed, Es, Et } = computeResidualErrors(f, zo, realisticParams));
   }
 
-  const noise_G_raw = Math.pow(10, noiseFloor_dB / 20);
+  const noise_G_raw = Math.pow(10, effectiveNoiseFloor_dB / 20);
   const repeat_G = Math.pow(10, repeatability_dB / 20);
 
   // Positive pathAttenuation_dB means weaker reflected signal at the receiver,
@@ -196,6 +232,9 @@ export function uncertaintyAtPoint(gammaMag, f, zo, uncertaintySettings) {
  *   noiseFloor_dB: number,
  *   repeatability_dB: number,
  *   pathAttenuation_dB: number,
+ *   ifBandwidthHz: number,
+ *   averagingEnabled: boolean,
+ *   averagingCount: number,
  *   useIdeal: boolean,
  *   realisticParams: Object
  * }} uncertaintySettings
