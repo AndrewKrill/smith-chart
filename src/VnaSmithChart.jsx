@@ -93,7 +93,11 @@ function initializeSmithChart(tracingArcsRef, width, rCircles, xCircles, showAdm
 
   rCircles.forEach((r) => {
     const [cx, , radius] = resistanceToXYR(r);
-    tracingArcs.append("circle").attr("cx", cx * width * 0.5).attr("cy", 0).attr("r", radius * width * 0.5);
+    tracingArcs
+      .append("circle")
+      .attr("cx", cx * width * 0.5)
+      .attr("cy", 0)
+      .attr("r", radius * width * 0.5);
   });
 
   xCircles.forEach((r, i) => {
@@ -101,10 +105,12 @@ function initializeSmithChart(tracingArcsRef, width, rCircles, xCircles, showAdm
     const xs = i % 2 === 1 ? 0 : xStart;
     const ys = i % 2 === 1 ? 0 : yStart;
     const cw = cy < 0 ? 1 : 0;
-    tracingArcs.append("path").attr(
-      "d",
-      `M ${xs * width * 0.5} ${ys * width * 0.5} A ${cy * width * 0.5} ${cy * width * 0.5} 0 0 ${cw} ${xEnd * width * 0.5} ${yEnd * width * 0.5}`,
-    );
+    tracingArcs
+      .append("path")
+      .attr(
+        "d",
+        `M ${xs * width * 0.5} ${ys * width * 0.5} A ${cy * width * 0.5} ${cy * width * 0.5} 0 0 ${cw} ${xEnd * width * 0.5} ${yEnd * width * 0.5}`,
+      );
   });
 
   if (showAdmittance) {
@@ -147,7 +153,9 @@ function HoverTooltip({ z, frequency, zo, freqUnit }) {
   return (
     <>
       {frequency !== null && frequency !== undefined && (
-        <p style={{ margin: 0, padding: 0 }}>{t("graph.frequency", { v: (frequency / (unitConverter[fUnit] || 1e6)).toPrecision(6), unit: fUnit })}</p>
+        <p style={{ margin: 0, padding: 0 }}>
+          {t("graph.frequency", { v: (frequency / (unitConverter[fUnit] || 1e6)).toPrecision(6), unit: fUnit })}
+        </p>
       )}
       <p style={{ margin: 0, padding: 0 }}>{t("graph.impedance", { z: res.zStr, polar: res.zPolarStr })}</p>
       <p style={{ margin: 0, padding: 0 }}>{t("graph.admittance", { v: res.admString })}</p>
@@ -181,15 +189,38 @@ const LightTooltip = styled(({ className, ...props }) => (
 // Graph settings dialog (same pattern as Graph.jsx DialogGraphSettings)
 // ---------------------------------------------------------------------------
 
-function DialogGraphSettings({ dialogOpen, setDialogOpen, resistanceCircles, setResistanceCircles, reactanceCircles, setReactanceCircles, showAdmittance, setShowAdmittance }) {
+function DialogGraphSettings({
+  dialogOpen,
+  setDialogOpen,
+  resistanceCircles,
+  setResistanceCircles,
+  reactanceCircles,
+  setReactanceCircles,
+  showAdmittance,
+  setShowAdmittance,
+}) {
   const { t } = useTranslation();
   const [tempRCircles, setTempRCircles] = useState(resistanceCircles.join(", "));
   const [tempReacCircles, setTempReacCircles] = useState(reactanceCircles.join(", "));
 
   function handleClose() {
     setDialogOpen(false);
-    setResistanceCircles(tempRCircles ? tempRCircles.split(",").map((x) => parseFloat(parseInput(x))).filter((v) => !isNaN(v)) : []);
-    setReactanceCircles(tempReacCircles ? tempReacCircles.split(",").map((x) => parseFloat(parseInput(x))).filter((v) => !isNaN(v)) : []);
+    setResistanceCircles(
+      tempRCircles
+        ? tempRCircles
+            .split(",")
+            .map((x) => parseFloat(parseInput(x)))
+            .filter((v) => !isNaN(v))
+        : [],
+    );
+    setReactanceCircles(
+      tempReacCircles
+        ? tempReacCircles
+            .split(",")
+            .map((x) => parseFloat(parseInput(x)))
+            .filter((v) => !isNaN(v))
+        : [],
+    );
   }
 
   return (
@@ -231,14 +262,14 @@ const DEFAULT_X_CIRCLES = [0.2, 0.5, 1, 2, 4, 10, -0.2, -0.5, -1, -2, -4, -10];
 
 export default function VnaSmithChart({
   zo,
-  sParamZo,            // zo of the loaded S-param file (for reflToZ)
-  intermediateTraces,  // { raw, afterCal, afterDeembed, afterPe, afterGating }
-  uncertaintyBands,    // uncertainty bands for S11 vs frequency
-  visibleStages,       // { raw, afterCal, afterDeembed, afterPe, afterGating }
-  setVisibleStages,    // setter for visibleStages
-  activeStages,        // { cal, deembed, pe, gating } — which corrections are currently enabled
-  dp0Impedance,        // { real, imaginary } — black-box target impedance (Ω) for DP0 marker
-  freqUnit,            // frequency unit string ("MHz", "GHz", …) for hover tooltip
+  sParamZo, // zo of the loaded S-param file (for reflToZ)
+  intermediateTraces, // { raw, afterCal, afterDeembed, afterPe, afterGating }
+  uncertaintyBands, // uncertainty bands for S11 vs frequency
+  visibleStages, // { raw, afterCal, afterDeembed, afterPe, afterGating }
+  setVisibleStages, // setter for visibleStages
+  activeStages, // { cal, deembed, pe, gating } — which corrections are currently enabled
+  dp0Impedance, // { real, imaginary } — black-box target impedance (Ω) for DP0 marker
+  freqUnit, // frequency unit string ("MHz", "GHz", …) for hover tooltip
 }) {
   const { t } = useTranslation();
   const svgRef = useRef(null);
@@ -379,7 +410,13 @@ export default function VnaSmithChart({
     const DP0_R = 7;
 
     // White halo
-    svg.append("circle").attr("cx", cx).attr("cy", cy).attr("r", DP0_R + 2).attr("fill", "white").attr("stroke", "none");
+    svg
+      .append("circle")
+      .attr("cx", cx)
+      .attr("cy", cy)
+      .attr("r", DP0_R + 2)
+      .attr("fill", "white")
+      .attr("stroke", "none");
     // Filled marker
     svg.append("circle").attr("cx", cx).attr("cy", cy).attr("r", DP0_R).attr("fill", "#d62728").attr("stroke", "#7f1010").attr("stroke-width", 1.5);
     // Label "DP0" — 5 chars × ~8 px/char average width
@@ -415,15 +452,46 @@ export default function VnaSmithChart({
     if (!intermediateTraces || !visibleStages) return;
 
     const preferredStageOrder = ["afterGating", "afterPe", "afterDeembed", "afterCal", "raw"];
-    const stageKey = preferredStageOrder.find((k) => visibleStages[k] && intermediateTraces[k]);
+    const stageKey = preferredStageOrder.find((k) => {
+      const stage = intermediateTraces[k];
+      return visibleStages[k] && stage && Object.keys(stage).length > 0;
+    });
     if (!stageKey) return;
     const stageData = intermediateTraces[stageKey];
     if (!stageData) return;
+    const stageEntries = Object.entries(stageData).filter(([, point]) => point?.S11);
+    if (stageEntries.length === 0) return;
 
     const refZo = sParamZo || zo;
     const { freqs, delta_dB } = uncertaintyBands;
+    const stageByFreq = new Map(stageEntries.map(([fStr, point]) => [Number(fStr), point]));
+    const stageFreqNums = Array.from(stageByFreq.keys())
+      .filter(Number.isFinite)
+      .sort((a, b) => a - b);
+    if (stageFreqNums.length === 0) return;
+
+    // Find the nearest available stage frequency for each uncertainty point so
+    // sparse/filtered traces still receive uncertainty overlays.
+    const matchStageFreq = (targetF) => {
+      if (stageByFreq.has(targetF)) return targetF;
+      let lo = 0;
+      let hi = stageFreqNums.length - 1;
+      while (lo <= hi) {
+        const mid = Math.floor((lo + hi) / 2);
+        if (stageFreqNums[mid] < targetF) lo = mid + 1;
+        else hi = mid - 1;
+      }
+      const lower = hi >= 0 ? stageFreqNums[hi] : null;
+      const upper = lo < stageFreqNums.length ? stageFreqNums[lo] : null;
+      if (lower === null) return upper;
+      if (upper === null) return lower;
+      return Math.abs(targetF - lower) <= Math.abs(upper - targetF) ? lower : upper;
+    };
+
     freqs.forEach((f, i) => {
-      const point = stageData[f];
+      const matchedF = matchStageFreq(Number(f));
+      if (matchedF === null || matchedF === undefined) return;
+      const point = stageByFreq.get(matchedF);
       if (!point?.S11) return;
       const s11 = polarToRectangular(point.S11);
       const z = reflToZ(s11, refZo);
@@ -464,7 +532,10 @@ export default function VnaSmithChart({
       const x = mouseX / (0.5 * width);
       const y = mouseY / (0.5 * width);
 
-      let re, im, frequency = null, snapped = false;
+      let re,
+        im,
+        frequency = null,
+        snapped = false;
 
       for (const s of hSnaps) {
         if (mouseX > s.x && mouseX < s.x + 2 * SNAP_RADIUS && mouseY > s.y && mouseY < s.y + 2 * SNAP_RADIUS) {
@@ -501,7 +572,11 @@ export default function VnaSmithChart({
 
       if (re > 0) {
         const [cx, , r] = resistanceToXYR(re);
-        svgGroup.select("#vna_hover_real").attr("cx", cx * width * 0.5).attr("cy", 0).attr("r", r * width * 0.5);
+        svgGroup
+          .select("#vna_hover_real")
+          .attr("cx", cx * width * 0.5)
+          .attr("cy", 0)
+          .attr("r", r * width * 0.5);
         const [cy, , , xEnd, yEnd] = reactanceToXYR(im);
         if (im === 0) {
           svgGroup.select("#vna_hover_imag").attr("d", `M 0 0 L ${-2 * width * 0.5} 0`);

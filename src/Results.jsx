@@ -8,6 +8,9 @@ import { useTranslation } from "react-i18next";
 import { processImpedance, rectangularToPolar, polarToRectangular, unitConverter } from "./commonFunctions";
 import { VNA_STAGES } from "./vnaStages.js";
 
+const UNCERTAINTY_STROKE_COLOR = "rgba(255,80,0,0.7)";
+const UNCERTAINTY_FILL_COLOR = "rgba(255,80,0,0.15)";
+
 function ImpedanceRes({ type, zStr, zPolarStr }) {
   return (
     <>
@@ -275,26 +278,53 @@ function sparamToTraceArrays(sparamData, freqUnit, zo) {
     const num = { real: 1 + rect.real, imaginary: rect.imaginary };
     const den = { real: 1 - rect.real, imaginary: -rect.imaginary };
     const denMag2 = den.real * den.real + den.imaginary * den.imaginary;
-    const zRe = zo * (num.real * den.real + num.imaginary * den.imaginary) / Math.max(denMag2, 1e-30);
-    const zIm = zo * (num.imaginary * den.real - num.real * den.imaginary) / Math.max(denMag2, 1e-30);
+    const zRe = (zo * (num.real * den.real + num.imaginary * den.imaginary)) / Math.max(denMag2, 1e-30);
+    const zIm = (zo * (num.imaginary * den.real - num.real * den.imaginary)) / Math.max(denMag2, 1e-30);
     zMagArr.push(Math.sqrt(zRe * zRe + zIm * zIm));
-    zAngArr.push(Math.atan2(zIm, zRe) * 180 / Math.PI);
+    zAngArr.push((Math.atan2(zIm, zRe) * 180) / Math.PI);
   }
   return { fAxis, freqKeys: sortedFreqs, s11dBArr, s11AngArr, zMagArr, zAngArr };
 }
 
-function uncertaintySeriesForFreqKeys(uncertaintyBands, freqKeys) {
+function uncertaintySeriesForFreqKeys(uncertaintyBands, freqKeys, type = "mag_dB") {
   if (!uncertaintyBands || !uncertaintyBands.freqs || uncertaintyBands.freqs.length === 0 || !freqKeys || freqKeys.length === 0) return null;
+  const fieldMap = {
+    mag_dB: { upper: "upper_dB", lower: "lower_dB", unit: "dB" },
+    phase_deg: { upper: "phase_upper_deg", lower: "phase_lower_deg", unit: "°" },
+    z_mag_ohm: { upper: "z_upper_ohm", lower: "z_lower_ohm", unit: "Ω" },
+  };
+  const fields = fieldMap[type];
+  if (!fields) return null;
+
   const upperMap = new Map();
   const lowerMap = new Map();
   uncertaintyBands.freqs.forEach((f, i) => {
-    upperMap.set(Number(f), uncertaintyBands.upper_dB?.[i]);
-    lowerMap.set(Number(f), uncertaintyBands.lower_dB?.[i]);
+    upperMap.set(Number(f), uncertaintyBands[fields.upper]?.[i]);
+    lowerMap.set(Number(f), uncertaintyBands[fields.lower]?.[i]);
   });
   const upper = freqKeys.map((f) => upperMap.get(Number(f)) ?? null);
   const lower = freqKeys.map((f) => lowerMap.get(Number(f)) ?? null);
   if (upper.every((v) => v == null) || lower.every((v) => v == null)) return null;
-  return { upper, lower };
+  return { upper, lower, unit: fields.unit };
+}
+
+function addUncertaintyBand(options, data, uncertaintySeries, scale = "y") {
+  if (!uncertaintySeries) return;
+  // Intentionally mutates the chart options/data objects owned by each plot builder.
+  if (!options.bands) options.bands = [];
+
+  const upperIdx = options.series.length;
+  options.series.push({ label: `+unc (${uncertaintySeries.unit})`, stroke: UNCERTAINTY_STROKE_COLOR, width: 1, scale, dash: [4, 3] });
+  data.push(uncertaintySeries.upper);
+
+  const lowerIdx = options.series.length;
+  options.series.push({ label: `−unc (${uncertaintySeries.unit})`, stroke: UNCERTAINTY_STROKE_COLOR, width: 1, scale, dash: [4, 3] });
+  data.push(uncertaintySeries.lower);
+
+  options.bands.push({
+    series: [upperIdx, lowerIdx],
+    fill: UNCERTAINTY_FILL_COLOR,
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -323,16 +353,14 @@ function IntermediateTracesPlots({ intermediateTraces, activeStages, sParamZo, f
   const height = 220;
 
   // Pre-compute all trace arrays once per stage
-  const traceArraysByStage = stagesWithData.map((stage) =>
-    sparamToTraceArrays(intermediateTraces[stage.key], freqUnit, sParamZo)
-  );
+  const traceArraysByStage = stagesWithData.map((stage) => sparamToTraceArrays(intermediateTraces[stage.key], freqUnit, sParamZo));
 
   // Shared frequency axis (from first stage)
   const fAxis = traceArraysByStage[0].fAxis;
   if (!fAxis || fAxis.length === 0) return null;
 
   // Helper: build a uPlot series/data pair for a given array extractor
-  function buildChart(yLabel, extractor, includeUncertainty = false) {
+  function buildChart(yLabel, extractor, uncertaintyType = null, uncertaintyScale = "y") {
     const series = [{ label: `Freq (${freqUnit})` }];
     const data = [fAxis];
     stagesWithData.forEach((stage, i) => {
@@ -352,33 +380,25 @@ function IntermediateTracesPlots({ intermediateTraces, activeStages, sParamZo, f
       axes: [{ label: `Freq (${freqUnit})` }, { scale: "y", label: yLabel }],
       scales: { x: { time: false }, y: { auto: true } },
     };
-    if (includeUncertainty) {
-      const unc = uncertaintySeriesForFreqKeys(uncertaintyBands, traceArraysByStage[0].freqKeys);
-      if (unc) {
-        options.series.push(
-          { label: "+unc (dB)", stroke: "rgba(255,80,0,0.7)", width: 1, scale: "y", dash: [4, 3] },
-          { label: "−unc (dB)", stroke: "rgba(255,80,0,0.7)", width: 1, scale: "y", fill: "rgba(255,80,0,0.15)", dash: [4, 3] },
-        );
-        data.push(unc.upper, unc.lower);
-      }
-    }
+    const unc = uncertaintyType ? uncertaintySeriesForFreqKeys(uncertaintyBands, traceArraysByStage[0].freqKeys, uncertaintyType) : null;
+    addUncertaintyBand(options, data, unc, uncertaintyScale);
     return { options, data };
   }
 
-  const s11dB  = buildChart(t("results.s11db"),  "s11dBArr", true);
-  const s11Ang = buildChart(t("results.s11ang"), "s11AngArr");
-  const zMag   = buildChart(t("results.zMag"),   "zMagArr");
-  const zAng   = buildChart(t("results.zAng"),   "zAngArr");
+  const s11dB = buildChart(t("results.s11db"), "s11dBArr", "mag_dB");
+  const s11Ang = buildChart(t("results.s11ang"), "s11AngArr", "phase_deg");
+  const zMag = buildChart(t("results.zMag"), "zMagArr", "z_mag_ohm");
+  const zAng = buildChart(t("results.zAng"), "zAngArr");
 
   return (
     <Box sx={{ mt: 2 }}>
       <Typography variant="subtitle2" sx={{ mb: 0.5 }}>
         {t("results.correctionStages")}
       </Typography>
-      <UplotReact options={s11dB.options}  data={s11dB.data} />
+      <UplotReact options={s11dB.options} data={s11dB.data} />
       <UplotReact options={s11Ang.options} data={s11Ang.data} />
-      <UplotReact options={zMag.options}   data={zMag.data} />
-      <UplotReact options={zAng.options}   data={zAng.data} />
+      <UplotReact options={zMag.options} data={zMag.data} />
+      <UplotReact options={zAng.options} data={zAng.data} />
     </Box>
   );
 }
@@ -404,14 +424,10 @@ function SPlot({ sparametersData, options, freqUnit, title, uncertaintyBands }) 
     }
     const sData = [f, m, a];
     if (s === "S11") {
-      const unc = uncertaintySeriesForFreqKeys(uncertaintyBands, sortedFreq);
-      if (unc) {
-        sParamOpt.series.push(
-          { label: "+unc (dB)", stroke: "rgba(255,80,0,0.7)", width: 1, scale: "y", dash: [4, 3] },
-          { label: "−unc (dB)", stroke: "rgba(255,80,0,0.7)", width: 1, scale: "y", fill: "rgba(255,80,0,0.15)", dash: [4, 3] },
-        );
-        sData.push(unc.upper, unc.lower);
-      }
+      const uncMag = uncertaintySeriesForFreqKeys(uncertaintyBands, sortedFreq, "mag_dB");
+      const uncPhase = uncertaintySeriesForFreqKeys(uncertaintyBands, sortedFreq, "phase_deg");
+      addUncertaintyBand(sParamOpt, sData, uncMag, "y");
+      addUncertaintyBand(sParamOpt, sData, uncPhase, "y2");
     }
     return (
       <div style={{ textAlign: "center" }} key={s}>
@@ -503,14 +519,13 @@ function SpanTolerancePlot({ spanResultsByTol, options, freqUnit, zo, plotKind, 
   }
   const gData = [fAxis, ...seriesData];
   if (plotKind === "s11") {
-    const unc = uncertaintySeriesForFreqKeys(uncertaintyBands, sortedFreq);
-    if (unc) {
-      sParamOpt.series.push(
-        { label: "+unc (dB)", stroke: "rgba(255,80,0,0.7)", width: 1, scale: "y", dash: [4, 3] },
-        { label: "−unc (dB)", stroke: "rgba(255,80,0,0.7)", width: 1, scale: "y", fill: "rgba(255,80,0,0.15)", dash: [4, 3] },
-      );
-      gData.push(unc.upper, unc.lower);
-    }
+    const uncMag = uncertaintySeriesForFreqKeys(uncertaintyBands, sortedFreq, "mag_dB");
+    const uncPhase = uncertaintySeriesForFreqKeys(uncertaintyBands, sortedFreq, "phase_deg");
+    addUncertaintyBand(sParamOpt, gData, uncMag, "y");
+    addUncertaintyBand(sParamOpt, gData, uncPhase, "y2");
+  } else if (plotKind === "z") {
+    const uncZMag = uncertaintySeriesForFreqKeys(uncertaintyBands, sortedFreq, "z_mag_ohm");
+    addUncertaintyBand(sParamOpt, gData, uncZMag, "y");
   }
   return <UplotReact options={sParamOpt} data={gData} />;
 }
@@ -572,14 +587,10 @@ function RPlot({ RefIn, options, freqUnit, title, uncertaintyBands }) {
       },
     );
   }
-  const unc = uncertaintySeriesForFreqKeys(uncertaintyBands, sortedFreq);
-  if (unc) {
-    sParamOpt.series.push(
-      { label: "+unc (dB)", stroke: "rgba(255,80,0,0.7)", width: 1, scale: "y", dash: [4, 3] },
-      { label: "−unc (dB)", stroke: "rgba(255,80,0,0.7)", width: 1, scale: "y", fill: "rgba(255,80,0,0.15)", dash: [4, 3] },
-    );
-    plotData.push(unc.upper, unc.lower);
-  }
+  const uncMag = uncertaintySeriesForFreqKeys(uncertaintyBands, sortedFreq, "mag_dB");
+  const uncPhase = uncertaintySeriesForFreqKeys(uncertaintyBands, sortedFreq, "phase_deg");
+  addUncertaintyBand(sParamOpt, plotData, uncMag, "y");
+  addUncertaintyBand(sParamOpt, plotData, uncPhase, "y2");
   return (
     <div style={{ textAlign: "center" }}>
       <h5 style={{ marginTop: 15, marginBottom: 0 }}>{title}</h5>
@@ -588,7 +599,21 @@ function RPlot({ RefIn, options, freqUnit, title, uncertaintyBands }) {
   );
 }
 
-export default function Results({ zProc, spanResults, freqUnit, plotType, sParameters, gainResults, noiseArray, RefIn, zo, uncertaintyBands, intermediateTraces, activeStages, sParamZo }) {
+export default function Results({
+  zProc,
+  spanResults,
+  freqUnit,
+  plotType,
+  sParameters,
+  gainResults,
+  noiseArray,
+  RefIn,
+  zo,
+  uncertaintyBands,
+  intermediateTraces,
+  activeStages,
+  sParamZo,
+}) {
   const { t, i18n } = useTranslation();
   const { zStr, zPolarStr, refStr, refPolarStr, vswr, qFactor } = zProc;
   const containerRef = useRef();
@@ -704,7 +729,13 @@ export default function Results({ zProc, spanResults, freqUnit, plotType, sParam
     const sparametersData = sParameters.data;
     return (
       <div ref={containerRef} style={{ width: "100%", marginTop: "30px" }}>
-        <SPlot sparametersData={sparametersData} options={options4} freqUnit={freqUnit} title={t("results.rawData")} uncertaintyBands={uncertaintyBands} />
+        <SPlot
+          sparametersData={sparametersData}
+          options={options4}
+          freqUnit={freqUnit}
+          title={t("results.rawData")}
+          uncertaintyBands={uncertaintyBands}
+        />
         <IntermediateTracesPlots
           intermediateTraces={intermediateTraces}
           activeStages={activeStages}
@@ -758,7 +789,14 @@ export default function Results({ zProc, spanResults, freqUnit, plotType, sParam
 
         <div ref={containerRef} style={{ width: "100%", marginTop: "30px" }}>
           <SpanTolerancePlot spanResultsByTol={spanResults} options={optionsZTol} freqUnit={freqUnit} zo={zo} plotKind="z" />
-          <SpanTolerancePlot spanResultsByTol={spanResults} options={optionsS11Tol} freqUnit={freqUnit} zo={zo} plotKind="s11" uncertaintyBands={uncertaintyBands} />
+          <SpanTolerancePlot
+            spanResultsByTol={spanResults}
+            options={optionsS11Tol}
+            freqUnit={freqUnit}
+            zo={zo}
+            plotKind="s11"
+            uncertaintyBands={uncertaintyBands}
+          />
           <IntermediateTracesPlots
             intermediateTraces={intermediateTraces}
             activeStages={activeStages}

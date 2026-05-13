@@ -1,5 +1,5 @@
 import { expect, test, describe } from "vitest";
-import { computeUncertaintyBands, uncertaintyAtPoint, computeResidualErrors } from "../src/uncertainty.js";
+import { computeUncertaintyBands, uncertaintyAtPoint, computeResidualErrors, computeCalibrationPathAttenuation_dB } from "../src/uncertainty.js";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -151,7 +151,7 @@ describe("computeUncertaintyBands", () => {
       useIdeal: false,
       realisticParams: { loadParams: { r_offset: 2 } },
     });
-    const validSources = ["directivity", "sourceMatch", "tracking", "noise", "repeatability"];
+    const validSources = ["directivity", "sourceMatch", "tracking", "noise", "repeatability", "pathAttenuation"];
     expect(validSources).toContain(bands.dominantSource);
   });
 
@@ -159,5 +159,45 @@ describe("computeUncertaintyBands", () => {
     const lowNoise = computeUncertaintyBands(spData, 50, { enabled: true, noiseFloor_dB: -80, repeatability_dB: -80, useIdeal: true });
     const highNoise = computeUncertaintyBands(spData, 50, { enabled: true, noiseFloor_dB: -20, repeatability_dB: -80, useIdeal: true });
     expect(highNoise.maxUncertainty_dB).toBeGreaterThan(lowNoise.maxUncertainty_dB);
+  });
+
+  test("returns phase and |Z| uncertainty envelopes", () => {
+    const bands = computeUncertaintyBands(spData, 50, {
+      enabled: true,
+      noiseFloor_dB: -60,
+      repeatability_dB: -50,
+      useIdeal: true,
+    });
+
+    expect(bands.phase_upper_deg.length).toBe(freqs.length);
+    expect(bands.phase_lower_deg.length).toBe(freqs.length);
+    expect(bands.z_upper_ohm.length).toBe(freqs.length);
+    expect(bands.z_lower_ohm.length).toBe(freqs.length);
+
+    for (let i = 0; i < freqs.length; i++) {
+      expect(bands.phase_upper_deg[i]).toBeGreaterThanOrEqual(bands.s11_phase_deg[i]);
+      expect(bands.phase_lower_deg[i]).toBeLessThanOrEqual(bands.s11_phase_deg[i]);
+      expect(bands.z_upper_ohm[i]).toBeGreaterThanOrEqual(bands.z_mag_ohm[i]);
+      expect(bands.z_lower_ohm[i]).toBeLessThanOrEqual(bands.z_mag_ohm[i]);
+    }
+  });
+});
+
+describe("computeCalibrationPathAttenuation_dB", () => {
+  test("captures ESR-bearing capacitor contribution", () => {
+    const freqs = [1e8, 1e9, 2e9];
+    const path = [{ name: "seriesCap", value: 1, unit: "pF", esr: 5, esl: 0 }];
+    const attenuation = computeCalibrationPathAttenuation_dB(path, freqs, 50);
+    expect(attenuation.length).toBe(freqs.length);
+    expect(Math.max(...attenuation)).toBeGreaterThan(0);
+  });
+
+  test("captures frequency response from quarter-wave open stub", () => {
+    const freqs = [5e8, 7.5e8, 1e9, 1.25e9, 1.5e9];
+    const path = [{ name: "stub", value: 75, unit: "mm", zo: 50, eeff: 1 }];
+    const attenuation = computeCalibrationPathAttenuation_dB(path, freqs, 50);
+    expect(attenuation.length).toBe(freqs.length);
+    const spread = Math.max(...attenuation) - Math.min(...attenuation);
+    expect(spread).toBeGreaterThan(0.01);
   });
 });
