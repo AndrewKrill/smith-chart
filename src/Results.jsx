@@ -8,6 +8,9 @@ import { useTranslation } from "react-i18next";
 import { processImpedance, rectangularToPolar, polarToRectangular, unitConverter } from "./commonFunctions";
 import { VNA_STAGES } from "./vnaStages.js";
 
+const UNCERTAINTY_STROKE_COLOR = "rgba(255,80,0,0.7)";
+const UNCERTAINTY_FILL_COLOR = "rgba(255,80,0,0.15)";
+
 function ImpedanceRes({ type, zStr, zPolarStr }) {
   return (
     <>
@@ -307,19 +310,20 @@ function uncertaintySeriesForFreqKeys(uncertaintyBands, freqKeys, type = "mag_dB
 
 function addUncertaintyBand(options, data, uncertaintySeries, scale = "y") {
   if (!uncertaintySeries) return;
+  // Intentionally mutates the chart options/data objects owned by each plot builder.
   if (!options.bands) options.bands = [];
 
   const upperIdx = options.series.length;
-  options.series.push({ label: `+unc (${uncertaintySeries.unit})`, stroke: "rgba(255,80,0,0.7)", width: 1, scale, dash: [4, 3] });
+  options.series.push({ label: `+unc (${uncertaintySeries.unit})`, stroke: UNCERTAINTY_STROKE_COLOR, width: 1, scale, dash: [4, 3] });
   data.push(uncertaintySeries.upper);
 
   const lowerIdx = options.series.length;
-  options.series.push({ label: `−unc (${uncertaintySeries.unit})`, stroke: "rgba(255,80,0,0.7)", width: 1, scale, dash: [4, 3] });
+  options.series.push({ label: `−unc (${uncertaintySeries.unit})`, stroke: UNCERTAINTY_STROKE_COLOR, width: 1, scale, dash: [4, 3] });
   data.push(uncertaintySeries.lower);
 
   options.bands.push({
     series: [upperIdx, lowerIdx],
-    fill: "rgba(255,80,0,0.15)",
+    fill: UNCERTAINTY_FILL_COLOR,
   });
 }
 

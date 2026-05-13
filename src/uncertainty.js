@@ -60,7 +60,10 @@ export function computeCalibrationPathAttenuation_dB(calibrationPathComponents, 
   const hiData = synthesizeS11FromCircuit(hiCircuit, frequencies, zo);
   const loData = synthesizeS11FromCircuit(loCircuit, frequencies, zo);
 
-  if (!hiData || !loData) return frequencies.map(() => 0);
+  if (!hiData || !loData) {
+    console.warn("computeCalibrationPathAttenuation_dB: path sensitivity synthesis failed; falling back to 0 dB attenuation.");
+    return frequencies.map(() => 0);
+  }
 
   return frequencies.map((f) => {
     const pHi = hiData[String(f)]?.S11;
@@ -166,7 +169,9 @@ export function uncertaintyAtPoint(gammaMag, f, zo, uncertaintySettings) {
 
   // Positive pathAttenuation_dB means weaker reflected signal at the receiver,
   // therefore larger minimum detectable DUT Γ by the same amplitude factor.
-  const pathAtten_lin = Math.pow(10, pathAttenuation_dB / 20);
+  // (Intentional behavior change from the prior implementation that reduced noise.)
+  const effectivePathAtten_dB = Math.max(0, pathAttenuation_dB);
+  const pathAtten_lin = Math.pow(10, effectivePathAtten_dB / 20);
   const noise_G = noise_G_raw * pathAtten_lin;
 
   // Expose the degradation contribution separately for dominant-source reporting
@@ -257,6 +262,11 @@ export function computeUncertaintyBands(sparamData, zo, uncertaintySettings, per
   let maxRepeat = 0;
   let maxPathAtten = 0;
 
+  const gammaToZMag = (magnitude, angle) => {
+    const z = reflToZ(polarToRectangular({ magnitude, angle }), zo);
+    return Math.hypot(z.real, z.imaginary);
+  };
+
   for (let fi = 0; fi < freqs.length; fi++) {
     const f = freqs[fi];
     const point = sparamData[f];
@@ -279,14 +289,15 @@ export function computeUncertaintyBands(sparamData, zo, uncertaintySettings, per
     const upperDB = 20 * Math.log10(upperMag);
     const lowerDB = 20 * Math.log10(lowerMag);
     const deltadB = upperDB - s11dB;
-    const phaseSpanDeg =
-      gammaMag <= 1e-15 || deltaGamma >= gammaMag ? 180 : (Math.asin(Math.min(1, deltaGamma / Math.max(gammaMag, 1e-15))) * 180) / Math.PI;
+    const phaseIsUnbounded = gammaMag <= 1e-15 || deltaGamma >= gammaMag;
+    const phaseRatio = Math.min(1, deltaGamma / Math.max(gammaMag, 1e-15));
+    const phaseSpanDeg = phaseIsUnbounded ? 180 : (Math.asin(phaseRatio) * 180) / Math.PI;
     const phaseLower = Math.max(-180, gammaAngle - phaseSpanDeg);
     const phaseUpper = Math.min(180, gammaAngle + phaseSpanDeg);
 
-    const zMagAtNominal = Math.hypot(...Object.values(reflToZ(polarToRectangular({ magnitude: gammaMag, angle: gammaAngle }), zo)));
-    const zMagAtUpper = Math.hypot(...Object.values(reflToZ(polarToRectangular({ magnitude: upperMag, angle: gammaAngle }), zo)));
-    const zMagAtLower = Math.hypot(...Object.values(reflToZ(polarToRectangular({ magnitude: lowerMag, angle: gammaAngle }), zo)));
+    const zMagAtNominal = gammaToZMag(gammaMag, gammaAngle);
+    const zMagAtUpper = gammaToZMag(upperMag, gammaAngle);
+    const zMagAtLower = gammaToZMag(lowerMag, gammaAngle);
     const zLower = Math.min(zMagAtUpper, zMagAtLower);
     const zUpper = Math.max(zMagAtUpper, zMagAtLower);
 

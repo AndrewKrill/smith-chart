@@ -465,26 +465,32 @@ export default function VnaSmithChart({
     const refZo = sParamZo || zo;
     const { freqs, delta_dB } = uncertaintyBands;
     const stageByFreq = new Map(stageEntries.map(([fStr, point]) => [Number(fStr), point]));
-    const stageFreqNums = Array.from(stageByFreq.keys()).filter(Number.isFinite);
+    const stageFreqNums = Array.from(stageByFreq.keys())
+      .filter(Number.isFinite)
+      .sort((a, b) => a - b);
     if (stageFreqNums.length === 0) return;
 
+    // Find the nearest available stage frequency for each uncertainty point so
+    // sparse/filtered traces still receive uncertainty overlays.
     const matchStageFreq = (targetF) => {
       if (stageByFreq.has(targetF)) return targetF;
-      let best = null;
-      let bestDiff = Infinity;
-      for (const sf of stageFreqNums) {
-        const d = Math.abs(sf - targetF);
-        if (d < bestDiff) {
-          bestDiff = d;
-          best = sf;
-        }
+      let lo = 0;
+      let hi = stageFreqNums.length - 1;
+      while (lo <= hi) {
+        const mid = Math.floor((lo + hi) / 2);
+        if (stageFreqNums[mid] < targetF) lo = mid + 1;
+        else hi = mid - 1;
       }
-      return best;
+      const lower = hi >= 0 ? stageFreqNums[hi] : null;
+      const upper = lo < stageFreqNums.length ? stageFreqNums[lo] : null;
+      if (lower === null) return upper;
+      if (upper === null) return lower;
+      return Math.abs(targetF - lower) <= Math.abs(upper - targetF) ? lower : upper;
     };
 
     freqs.forEach((f, i) => {
       const matchedF = matchStageFreq(Number(f));
-      if (matchedF == null) return;
+      if (matchedF === null || matchedF === undefined) return;
       const point = stageByFreq.get(matchedF);
       if (!point?.S11) return;
       const s11 = polarToRectangular(point.S11);
