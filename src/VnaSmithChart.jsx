@@ -7,7 +7,7 @@
  * correction does.
  *
  * Features:
- *   - DP0 (black-box target) reference marker
+ *   - Selectable DP target reference marker/trace
  *   - Interactive hover tooltip (frequency, impedance, VSWR, reflection coefficient, etc.)
  *   - Graph settings dialog (resistance/reactance circles, admittance overlay)
  */
@@ -29,6 +29,8 @@ import DialogTitle from "@mui/material/DialogTitle";
 import DialogContent from "@mui/material/DialogContent";
 import TextField from "@mui/material/TextField";
 import FormControl from "@mui/material/FormControl";
+import Select from "@mui/material/Select";
+import MenuItem from "@mui/material/MenuItem";
 
 import { polarToRectangular, reflToZ, processImpedance, parseInput, unitConverter } from "./commonFunctions.js";
 import { VNA_STAGES } from "./vnaStages.js";
@@ -40,6 +42,8 @@ const STAGES = VNA_STAGES;
 
 // Snap-point hit radius in pixels
 const SNAP_RADIUS = 5;
+// Visual point radius in pixels
+const POINT_RADIUS = 2;
 
 // ---------------------------------------------------------------------------
 // Coordinate helpers (pure math, no side effects)
@@ -268,7 +272,10 @@ export default function VnaSmithChart({
   visibleStages, // { raw, afterCal, afterDeembed, afterPe, afterGating }
   setVisibleStages, // setter for visibleStages
   activeStages, // { cal, deembed, pe, gating } — which corrections are currently enabled
-  dp0Impedance, // { real, imaginary } — black-box target impedance (Ω) for DP0 marker
+  targetDpTrace, // frequency-keyed trace for selected DP target
+  targetDpIndex, // selected DP index
+  setTargetDpIndex, // setter for selected DP index
+  targetDpOptions, // selectable DP indices for target selector
   freqUnit, // frequency unit string ("MHz", "GHz", …) for hover tooltip
 }) {
   const { t } = useTranslation();
@@ -373,7 +380,7 @@ export default function VnaSmithChart({
           .append("circle")
           .attr("cx", cx)
           .attr("cy", cy)
-          .attr("r", SNAP_RADIUS)
+          .attr("r", POINT_RADIUS)
           .attr("fill", stage.color)
           .attr("opacity", 0.3)
           .attr("stroke", "none");
@@ -388,25 +395,46 @@ export default function VnaSmithChart({
 
       // Endpoint dot (larger, opaque)
       const last = coord[coord.length - 1];
-      svg.append("circle").attr("cx", last[0]).attr("cy", last[1]).attr("r", 4).attr("fill", stage.color).attr("stroke", "none");
+      svg.append("circle").attr("cx", last[0]).attr("cy", last[1]).attr("r", POINT_RADIUS).attr("fill", stage.color).attr("stroke", "none");
     }
 
     setHSnaps(snaps);
   }, [zo, sParamZo, width, intermediateTraces, visibleStages]);
 
   // -------------------------------------------------------------------------
-  // Draw DP0 (black-box target) marker
+  // Draw selected DP target marker / trace
   // -------------------------------------------------------------------------
   useEffect(() => {
     const svg = d3.select(dp0Ref.current);
     svg.selectAll("*").remove();
-    if (!dp0Impedance) return;
+    if (!targetDpTrace) return;
 
-    const r = parseFloat(dp0Impedance.real);
-    const im = parseFloat(dp0Impedance.imaginary);
-    if (isNaN(r) || r < 0) return;
+    const refZo = sParamZo || zo;
+    const coords = Object.entries(targetDpTrace)
+      .filter(([, point]) => point?.S11)
+      .map(([fStr, point]) => ({ f: Number(fStr), point }))
+      .filter(({ f }) => Number.isFinite(f))
+      .sort((a, b) => a.f - b.f)
+      .map(({ point }) => {
+        const z = reflToZ(polarToRectangular(point.S11), refZo);
+        return impedanceToSmithChart(z.real / zo, z.imaginary / zo, width);
+      });
+    if (coords.length === 0) return;
 
-    const [cx, cy] = impedanceToSmithChart(r / zo, im / zo, width);
+    if (coords.length >= 2) {
+      const pathStr = `M ${coords[0][0]} ${coords[0][1]} ` + coords.slice(1).map((c) => `L ${c[0]} ${c[1]}`).join(" ");
+      svg
+        .append("path")
+        .attr("fill", "none")
+        .attr("stroke", "#d62728")
+        .attr("stroke-width", 1.2)
+        .attr("stroke-linecap", "round")
+        .attr("stroke-linejoin", "round")
+        .attr("stroke-dasharray", "4,2")
+        .attr("d", pathStr);
+    }
+
+    const [cx, cy] = coords[coords.length - 1];
     const DP0_R = 7;
 
     // White halo
@@ -419,8 +447,8 @@ export default function VnaSmithChart({
       .attr("stroke", "none");
     // Filled marker
     svg.append("circle").attr("cx", cx).attr("cy", cy).attr("r", DP0_R).attr("fill", "#d62728").attr("stroke", "#7f1010").attr("stroke-width", 1.5);
-    // Label "DP0" — 5 chars × ~8 px/char average width
-    const strLen = 5 * 8;
+    const dpLabel = t("circuit.dp", { i: targetDpIndex ?? 0 });
+    const strLen = Math.max(5, String(dpLabel).length) * 8;
     svg
       .append("rect")
       .attr("x", cx - strLen / 2)
@@ -434,13 +462,13 @@ export default function VnaSmithChart({
       .append("text")
       .attr("x", cx)
       .attr("y", cy - DP0_R - 5)
-      .text("DP0")
+      .text(dpLabel)
       .attr("font-size", "11px")
       .attr("font-weight", "bold")
       .attr("text-anchor", "middle")
       .attr("fill", "#d62728")
       .attr("stroke", "none");
-  }, [dp0Impedance, zo, width]);
+  }, [targetDpTrace, targetDpIndex, sParamZo, zo, width, t]);
 
   // -------------------------------------------------------------------------
   // Draw uncertainty bounds as thin solid lines for the most-corrected visible stage
@@ -706,6 +734,23 @@ export default function VnaSmithChart({
             />
           ))}
         </Stack>
+        {(targetDpOptions?.length || 0) > 0 && (
+          <Box sx={{ px: 1, pb: 0.75, display: "flex", justifyContent: "flex-end" }}>
+            <FormControl size="small" sx={{ minWidth: 170 }}>
+              <Select
+                value={targetDpIndex ?? 0}
+                onChange={(e) => setTargetDpIndex?.(Number(e.target.value))}
+                renderValue={(value) => t("vna.pipeline.targetDp", { i: value })}
+              >
+                {targetDpOptions.map((i) => (
+                  <MenuItem key={i} value={i}>
+                    {t("circuit.dp", { i })}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          </Box>
+        )}
       </Box>
     </>
   );
