@@ -233,6 +233,7 @@ export default function VnaSmithChart({
   zo,
   sParamZo,            // zo of the loaded S-param file (for reflToZ)
   intermediateTraces,  // { raw, afterCal, afterDeembed, afterPe, afterGating }
+  uncertaintyBands,    // uncertainty bands for S11 vs frequency
   visibleStages,       // { raw, afterCal, afterDeembed, afterPe, afterGating }
   setVisibleStages,    // setter for visibleStages
   activeStages,        // { cal, deembed, pe, gating } — which corrections are currently enabled
@@ -246,6 +247,7 @@ export default function VnaSmithChart({
   const tracingArcsRef = useRef(null);
   const tracesRef = useRef(null);
   const dp0Ref = useRef(null);
+  const uncertaintyRef = useRef(null);
   const hoverRectsRef = useRef(null);
 
   const [width, setWidth] = useState(500);
@@ -404,6 +406,46 @@ export default function VnaSmithChart({
   }, [dp0Impedance, zo, width]);
 
   // -------------------------------------------------------------------------
+  // Draw uncertainty ellipses for the most-corrected visible stage
+  // -------------------------------------------------------------------------
+  useEffect(() => {
+    const svg = d3.select(uncertaintyRef.current);
+    svg.selectAll("*").remove();
+    if (!uncertaintyBands || !uncertaintyBands.freqs || uncertaintyBands.freqs.length === 0) return;
+    if (!intermediateTraces || !visibleStages) return;
+
+    const preferredStageOrder = ["afterGating", "afterPe", "afterDeembed", "afterCal", "raw"];
+    const stageKey = preferredStageOrder.find((k) => visibleStages[k] && intermediateTraces[k]);
+    if (!stageKey) return;
+    const stageData = intermediateTraces[stageKey];
+    if (!stageData) return;
+
+    const refZo = sParamZo || zo;
+    const { freqs, delta_dB } = uncertaintyBands;
+    freqs.forEach((f, i) => {
+      const point = stageData[f];
+      if (!point?.S11) return;
+      const s11 = polarToRectangular(point.S11);
+      const z = reflToZ(s11, refZo);
+      const [cx, cy] = impedanceToSmithChart(z.real / zo, z.imaginary / zo, width);
+
+      const gammaMag = point.S11.magnitude;
+      const dGamma = gammaMag * (1 - Math.pow(10, -Math.abs(delta_dB[i]) / 20));
+      const r_px = Math.max(2, dGamma * width * 0.5);
+
+      svg
+        .append("ellipse")
+        .attr("cx", cx)
+        .attr("cy", cy)
+        .attr("rx", r_px)
+        .attr("ry", r_px)
+        .attr("fill", "rgba(200,100,0,0.12)")
+        .attr("stroke", "rgba(200,100,0,0.4)")
+        .attr("stroke-width", 1);
+    });
+  }, [zo, sParamZo, width, uncertaintyBands, intermediateTraces, visibleStages]);
+
+  // -------------------------------------------------------------------------
   // Mouse handlers (hover tooltip + indicator circles)
   // -------------------------------------------------------------------------
   useEffect(() => {
@@ -549,6 +591,7 @@ export default function VnaSmithChart({
                   <g ref={tracingArcsRef} />
                   <g ref={dp0Ref} />
                   <g ref={tracesRef} />
+                  <g ref={uncertaintyRef} />
                   <g ref={hoverRectsRef} />
                 </g>
               </svg>

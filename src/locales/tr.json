@@ -351,7 +351,9 @@
       "desc": "Belirsizlik bantları tüm S11 büyüklük grafiklerinde ve Smith şemasında elips olarak gösterilir.",
       "plotTitle": "S11 ±belirsizlik bantları",
       "maxUnc": "Maks belirsizlik: ±{{v}} dB, {{f}} {{unit}} (baskın: {{src}})",
-      "pathAttenuation": "Bağlantı yolu zayıflaması"
+      "pathAttenuation": "Kalibrasyon yolu zayıflaması",
+      "autoPathAtten": "Otomatik: {{v}} dB (kalibrasyon yolundan)",
+      "autoPathAttenDesc": "Kalibrasyon yolu zayıflaması, kalibrasyon düzleminden ölçüm noktasına kadar (son DPn bileşeninin sağında) otomatik hesaplanır. Kalibrasyon düzlemi aktifken manuel alan devre dışıdır."
     },
     "pipeline": {
       "splitChart": "Show corrections on second chart",

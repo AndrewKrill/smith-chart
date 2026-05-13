@@ -351,7 +351,9 @@
       "desc": "不確かさ帯域はすべての S11 振幅グラフと、スミスチャート上の楕円で表示されます。",
       "plotTitle": "S11 ±不確かさ帯域",
       "maxUnc": "最大不確かさ：±{{v}} dB（{{f}} {{unit}}、支配要因：{{src}}）",
-      "pathAttenuation": "接続パス減衰量"
+      "pathAttenuation": "校正パス減衰量",
+      "autoPathAtten": "自動: {{v}} dB（校正パス由来）",
+      "autoPathAttenDesc": "校正パス減衰量は、校正面から測定点（最後の DPn コンポーネントの右側）まで自動計算されます。校正面が有効な間は手動入力は無効です。"
     },
     "pipeline": {
       "splitChart": "Show corrections on second chart",
